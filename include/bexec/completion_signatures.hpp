@@ -24,11 +24,13 @@ struct is_completion_signature : std::false_type {};
 
 template <class... Args>
 struct is_completion_signature<set_value_t(Args...)>
-    : std::bool_constant<((std::is_object_v<Args> || std::is_reference_v<Args>) && ...)> {};
+    : std::bool_constant<(
+          (std::is_object_v<Args> || std::is_reference_v<Args>) && ...)> {};
 
 template <class Error>
 struct is_completion_signature<set_error_t(Error)>
-    : std::bool_constant<std::is_object_v<Error> || std::is_reference_v<Error>> {};
+    : std::bool_constant<std::is_object_v<Error> ||
+                         std::is_reference_v<Error>> {};
 
 template <>
 struct is_completion_signature<set_stopped_t()> : std::true_type {};
@@ -47,7 +49,7 @@ template <class Tag, class Signature>
 inline constexpr bool completion_signature_matches_v =
     completion_signature_matches<Tag, Signature>::value;
 
-} // namespace detail
+}  // namespace detail
 
 /**
  * @brief P2300-style completion signature function type.
@@ -60,28 +62,30 @@ concept completion_signature = detail::is_completion_signature_v<Signature>;
  */
 template <completion_signature... Signatures>
 struct completion_signatures {
-    template <class Tag>
-    [[nodiscard]] static consteval std::size_t count_of() noexcept {
-        return (std::size_t{0} + ... +
-                (detail::completion_signature_matches_v<Tag, Signatures>
-                     ? std::size_t{1}
-                     : std::size_t{0}));
-    }
+  template <class Tag>
+  [[nodiscard]] static consteval std::size_t count_of() noexcept {
+    return (std::size_t{0} + ... +
+            (detail::completion_signature_matches_v<Tag, Signatures>
+                 ? std::size_t{1}
+                 : std::size_t{0}));
+  }
 
-    template <class Fn>
-    static constexpr void for_each(Fn&& fn) {
-        (fn(static_cast<Signatures*>(nullptr)), ...);
-    }
+  template <class Fn>
+  static constexpr void for_each(Fn&& fn) {
+    (fn(static_cast<Signatures*>(nullptr)), ...);
+  }
 };
 
 template <class>
 struct is_completion_signatures : std::false_type {};
 
 template <class... Signatures>
-struct is_completion_signatures<completion_signatures<Signatures...>> : std::true_type {};
+struct is_completion_signatures<completion_signatures<Signatures...>>
+    : std::true_type {};
 
 template <class Completions>
-concept valid_completion_signatures = is_completion_signatures<Completions>::value;
+concept valid_completion_signatures =
+    is_completion_signatures<Completions>::value;
 
 namespace detail {
 
@@ -90,17 +94,18 @@ struct concat_type_lists;
 
 template <>
 struct concat_type_lists<> {
-    using type = type_list<>;
+  using type = type_list<>;
 };
 
 template <class... Ts>
 struct concat_type_lists<type_list<Ts...>> {
-    using type = type_list<Ts...>;
+  using type = type_list<Ts...>;
 };
 
 template <class... As, class... Bs, class... Rest>
 struct concat_type_lists<type_list<As...>, type_list<Bs...>, Rest...> {
-    using type = typename concat_type_lists<type_list<As..., Bs...>, Rest...>::type;
+  using type =
+      typename concat_type_lists<type_list<As..., Bs...>, Rest...>::type;
 };
 
 template <class... Lists>
@@ -125,26 +130,28 @@ struct unique_type_list_impl;
 
 template <class... Seen>
 struct unique_type_list_impl<type_list<Seen...>, type_list<>> {
-    using type = type_list<Seen...>;
+  using type = type_list<Seen...>;
 };
 
 template <class... Seen, class Head, class... Tail>
 struct unique_type_list_impl<type_list<Seen...>, type_list<Head, Tail...>> {
-    using next_seen = std::conditional_t<type_list_contains_v<Head, type_list<Seen...>>,
-                                         type_list<Seen...>,
-                                         type_list<Seen..., Head>>;
-    using type = typename unique_type_list_impl<next_seen, type_list<Tail...>>::type;
+  using next_seen =
+      std::conditional_t<type_list_contains_v<Head, type_list<Seen...>>,
+                         type_list<Seen...>, type_list<Seen..., Head>>;
+  using type =
+      typename unique_type_list_impl<next_seen, type_list<Tail...>>::type;
 };
 
 template <class List>
-using unique_type_list_t = typename unique_type_list_impl<type_list<>, List>::type;
+using unique_type_list_t =
+    typename unique_type_list_impl<type_list<>, List>::type;
 
 template <class List>
 struct completion_signatures_from_type_list;
 
 template <class... Signatures>
 struct completion_signatures_from_type_list<type_list<Signatures...>> {
-    using type = completion_signatures<Signatures...>;
+  using type = completion_signatures<Signatures...>;
 };
 
 template <class List>
@@ -153,12 +160,12 @@ using completion_signatures_from_type_list_t =
 
 template <class Signature, class Tag, template <class...> class Tuple>
 struct gather_one_signature {
-    using type = type_list<>;
+  using type = type_list<>;
 };
 
 template <class Tag, class... Args, template <class...> class Tuple>
 struct gather_one_signature<Tag(Args...), Tag, Tuple> {
-    using type = type_list<Tuple<Args...>>;
+  using type = type_list<Tuple<Args...>>;
 };
 
 template <class List, template <class...> class Variant>
@@ -166,7 +173,7 @@ struct apply_variant_to_type_list;
 
 template <class... Ts, template <class...> class Variant>
 struct apply_variant_to_type_list<type_list<Ts...>, Variant> {
-    using type = Variant<Ts...>;
+  using type = Variant<Ts...>;
 };
 
 template <class Tag, valid_completion_signatures Completions,
@@ -175,10 +182,11 @@ struct gather_signatures;
 
 template <class Tag, class... Signatures, template <class...> class Tuple,
           template <class...> class Variant>
-struct gather_signatures<Tag, completion_signatures<Signatures...>, Tuple, Variant> {
-    using gathered = concat_type_lists_t<
-        typename gather_one_signature<Signatures, Tag, Tuple>::type...>;
-    using type = typename apply_variant_to_type_list<gathered, Variant>::type;
+struct gather_signatures<Tag, completion_signatures<Signatures...>, Tuple,
+                         Variant> {
+  using gathered = concat_type_lists_t<
+      typename gather_one_signature<Signatures, Tag, Tuple>::type...>;
+  using type = typename apply_variant_to_type_list<gathered, Variant>::type;
 };
 
 template <class Tag, valid_completion_signatures Completions,
@@ -191,7 +199,7 @@ struct variant_from_type_list;
 
 template <class... Ts>
 struct variant_from_type_list<type_list<Ts...>> {
-    using type = std::variant<Ts...>;
+  using type = std::variant<Ts...>;
 };
 
 template <class List>
@@ -199,12 +207,12 @@ using variant_from_type_list_t = typename variant_from_type_list<List>::type;
 
 template <class... Ts>
 struct variant_or_empty {
-    using type = std::variant<Ts...>;
+  using type = std::variant<Ts...>;
 };
 
 template <>
 struct variant_or_empty<> {
-    using type = type_list<>;
+  using type = type_list<>;
 };
 
 template <class... Ts>
@@ -212,10 +220,10 @@ struct single_type;
 
 template <class T>
 struct single_type<T> {
-    using type = T;
+  using type = T;
 };
 
-} // namespace detail
+}  // namespace detail
 
 template <class... Ts>
 using variant_or_empty = typename detail::variant_or_empty<Ts...>::type;
@@ -223,5 +231,5 @@ using variant_or_empty = typename detail::variant_or_empty<Ts...>::type;
 template <class... Ts>
 using single_type = typename detail::single_type<Ts...>::type;
 
-} // namespace bexec
+}  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_

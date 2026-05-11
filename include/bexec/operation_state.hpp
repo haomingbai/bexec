@@ -12,14 +12,14 @@ namespace bexec {
  * @brief Starts an operation state by calling op.start().
  */
 struct start_t {
-    template <class Operation>
-        requires(!std::is_rvalue_reference_v<Operation&&> &&
-                 requires(Operation& operation) {
-                     { operation.start() } noexcept -> std::same_as<void>;
-                 })
-    constexpr void operator()(Operation&& operation) const noexcept {
-        operation.start();
-    }
+  template <class Operation>
+    requires(!std::is_rvalue_reference_v<Operation &&> &&
+             requires(Operation& operation) {
+               { operation.start() } noexcept -> std::same_as<void>;
+             })
+  constexpr void operator()(Operation&& operation) const noexcept {
+    operation.start();
+  }
 };
 
 inline constexpr start_t start{};
@@ -29,8 +29,8 @@ inline constexpr start_t start{};
  */
 template <class Operation>
 concept operation_state = requires(std::remove_cvref_t<Operation>& operation) {
-    bexec::start(operation);
+  bexec::start(operation);
 };
 
-} // namespace bexec
+}  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_OPERATION_STATE_HPP_

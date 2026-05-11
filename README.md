@@ -10,7 +10,8 @@ environment queries, a few sender factories/adaptors, and focused tests.
 
 ## What It Is
 
-- A header-only C++20 library under `include/bexec/bexec.hpp`.
+- A header-only C++20 library with an umbrella header at
+  `include/bexec/bexec.hpp` and feature headers under `include/bexec/`.
 - A minimal sender/receiver vocabulary:
   - `start`
   - `connect`

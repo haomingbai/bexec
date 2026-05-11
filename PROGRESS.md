@@ -63,3 +63,55 @@
   - `repeat_until` still uses the safer sender-factory form and discards child values.
   - `io_context::run()` is a drain loop, not a blocking work-guarded event loop.
   - Coroutine support is limited to `task<T>`/`task<void>` and scheduler resumption.
+
+## Checkpoint 4: Header and test layout split
+
+- Completed:
+  - Replaced the monolithic public header with `include/bexec/bexec.hpp` as an umbrella header.
+  - Split public feature headers into completion metadata, CPOs, concepts, env/query, stop token, factories, adaptors, scheduler, task, repeat, and when_all modules.
+  - Moved implementation helpers under `include/bexec/detail/`.
+  - Split tests into one feature module per test source file with shared support in `tests/test_support.hpp`.
+  - Updated maintenance documentation for the new layout.
+- Files changed:
+  - `include/bexec/bexec.hpp`
+  - `include/bexec/completion_signatures.hpp`
+  - `include/bexec/concepts.hpp`
+  - `include/bexec/cpo.hpp`
+  - `include/bexec/env.hpp`
+  - `include/bexec/just.hpp`
+  - `include/bexec/repeat_until.hpp`
+  - `include/bexec/scheduler.hpp`
+  - `include/bexec/stop_token.hpp`
+  - `include/bexec/task.hpp`
+  - `include/bexec/then.hpp`
+  - `include/bexec/when_all.hpp`
+  - `include/bexec/detail/config.hpp`
+  - `include/bexec/detail/operation.hpp`
+  - `include/bexec/detail/repeat_until.hpp`
+  - `include/bexec/detail/schedule_sender.hpp`
+  - `include/bexec/detail/then.hpp`
+  - `include/bexec/detail/type_traits.hpp`
+  - `include/bexec/detail/when_all.hpp`
+  - `tests/CMakeLists.txt`
+  - `tests/test_main.cpp`
+  - `tests/test_support.hpp`
+  - `tests/test_concepts.cpp`
+  - `tests/test_env.cpp`
+  - `tests/test_just.cpp`
+  - `tests/test_repeat_until.cpp`
+  - `tests/test_scheduler.cpp`
+  - `tests/test_stop_token.cpp`
+  - `tests/test_task.cpp`
+  - `tests/test_then.cpp`
+  - `tests/test_when_all.cpp`
+  - `README.md`
+  - `docs/maintenance.md`
+  - `PROGRESS.md`
+- Tests run:
+  - `cmake -S . -B build`
+  - `cmake --build build`
+  - `ctest --test-dir build --output-on-failure`
+  - `./build/examples/bexec_examples`
+- Known limitations/TODOs:
+  - No behavior changes were intended in this checkpoint.
+  - Files under `include/bexec/detail/` remain implementation details and should not be treated as stable public API.

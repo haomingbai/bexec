@@ -2,14 +2,20 @@
 
 ## Code Layout
 
-- `include/bexec/bexec.hpp`: public header and implementation.
-- `tests/test_bexec.cpp`: CTest-based executable tests.
+- `include/bexec/bexec.hpp`: public umbrella header.
+- `include/bexec/*.hpp`: public feature headers.
+- `include/bexec/detail/*.hpp`: implementation helpers that are not part of
+  the public API contract.
+- `tests/test_main.cpp`: CTest executable entry point.
+- `tests/test_support.hpp`: shared test receiver and assertion helpers.
+- `tests/test_*.cpp`: one feature module per test file.
 - `examples/basic.cpp`: compiled examples covering the main features.
 - `docs/`: usage, design, maintenance, and roadmap documentation.
 - `PROGRESS.md`: checkpoint log with commands run and known limitations.
 
 The library is currently header-only. Add `src/` only when there is a concrete
-need for separately compiled implementation.
+need for separately compiled implementation. Keep implementation-only helper
+types under `include/bexec/detail/`.
 
 ## Adding A Sender
 

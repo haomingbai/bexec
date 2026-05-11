@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_THEN_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_THEN_HPP_
+
 #include <bexec/detail/config.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
@@ -60,3 +63,4 @@ private:
 };
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_THEN_HPP_

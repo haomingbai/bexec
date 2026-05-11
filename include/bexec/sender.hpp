@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_SENDER_HPP_
+#define BEXEC_INCLUDE_BEXEC_SENDER_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/env.hpp>
@@ -87,3 +90,4 @@ concept sender_to =
     };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_SENDER_HPP_

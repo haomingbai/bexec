@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_QUERY_HPP_
+#define BEXEC_INCLUDE_BEXEC_QUERY_HPP_
+
 #include <bexec/stop_token.hpp>
 
 #include <utility>
@@ -56,3 +59,4 @@ struct query_t {
 inline constexpr query_t query{};
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_QUERY_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_
+#define BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_
+
 #include <bexec/detail/type_traits.hpp>
 
 #include <atomic>
@@ -225,3 +228,4 @@ concept stop_source =
     };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_

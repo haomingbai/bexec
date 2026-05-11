@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_REPEAT_UNTIL_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_REPEAT_UNTIL_HPP_
+
 #include <bexec/detail/config.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
@@ -165,3 +168,4 @@ private:
 };
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_REPEAT_UNTIL_HPP_

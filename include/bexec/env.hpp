@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_ENV_HPP_
+#define BEXEC_INCLUDE_BEXEC_ENV_HPP_
+
 #include <bexec/query.hpp>
 #include <bexec/stop_token.hpp>
 
@@ -51,3 +54,4 @@ private:
 };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_ENV_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_RECEIVER_HPP_
+#define BEXEC_INCLUDE_BEXEC_RECEIVER_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/env.hpp>
 
@@ -130,3 +133,4 @@ concept receiver_of =
     detail::receiver_accepts_all<Receiver, Completions>::value;
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_RECEIVER_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_TASK_HPP_
+#define BEXEC_INCLUDE_BEXEC_TASK_HPP_
+
 #include <bexec/detail/config.hpp>
 
 #include <coroutine>
@@ -179,3 +182,4 @@ private:
 };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_TASK_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_REPEAT_UNTIL_HPP_
+#define BEXEC_INCLUDE_BEXEC_REPEAT_UNTIL_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/detail/repeat_until.hpp>
 #include <bexec/detail/type_traits.hpp>
@@ -59,3 +62,4 @@ template <class Factory, class Predicate>
 }
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_REPEAT_UNTIL_HPP_

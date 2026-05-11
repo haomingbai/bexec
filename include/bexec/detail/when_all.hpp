@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_
+
 #include <bexec/detail/config.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/operation_state.hpp>
@@ -167,3 +170,4 @@ template <class... Senders>
 using when_all_error_variant_t = variant_from_type_list_t<when_all_error_list_t<Senders...>>;
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
+#define BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
+
 /**
  * @file bexec.hpp
  * @brief Umbrella header for the bexec sender/receiver library.
@@ -24,3 +27,4 @@
 #include <bexec/task.hpp>
 #include <bexec/then.hpp>
 #include <bexec/when_all.hpp>
+#endif  // BEXEC_INCLUDE_BEXEC_BEXEC_HPP_

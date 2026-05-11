@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_THEN_HPP_
+#define BEXEC_INCLUDE_BEXEC_THEN_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>
 #include <bexec/detail/operation.hpp>
@@ -93,3 +96,4 @@ template <sender Sender, class Fn>
 }
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_THEN_HPP_

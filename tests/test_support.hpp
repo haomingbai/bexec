@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_TESTS_TEST_SUPPORT_HPP_
+#define BEXEC_TESTS_TEST_SUPPORT_HPP_
+
 #include <concepts>
 #include <exception>
 #include <iostream>
@@ -115,3 +118,4 @@ void test_then();
 void test_when_all();
 
 } // namespace bexec_tests
+#endif  // BEXEC_TESTS_TEST_SUPPORT_HPP_

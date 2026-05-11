@@ -1,7 +1,11 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_
+
 #if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
 #define BEXEC_DETAIL_EXCEPTIONS_ENABLED 1
 #else
 #define BEXEC_DETAIL_EXCEPTIONS_ENABLED 0
 #endif
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_

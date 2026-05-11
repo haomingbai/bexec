@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_IO_CONTEXT_DETAIL_SCHEDULE_SENDER_HPP_
+#define BEXEC_INCLUDE_BEXEC_IO_CONTEXT_DETAIL_SCHEDULE_SENDER_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/detail/config.hpp>
 #include <bexec/query.hpp>
@@ -90,3 +93,4 @@ private:
 };
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_IO_CONTEXT_DETAIL_SCHEDULE_SENDER_HPP_

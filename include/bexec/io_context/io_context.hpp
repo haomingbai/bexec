@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_IO_CONTEXT_IO_CONTEXT_HPP_
+#define BEXEC_INCLUDE_BEXEC_IO_CONTEXT_IO_CONTEXT_HPP_
+
 #include <bexec/scheduler.hpp>
 #include <condition_variable>
 #include <coroutine>
@@ -166,3 +169,4 @@ inline detail::schedule_sender io_context::scheduler::schedule() const {
 }
 
 }  // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_IO_CONTEXT_IO_CONTEXT_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_
+#define BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_
+
 #include <concepts>
 #include <cstddef>
 #include <type_traits>
@@ -221,3 +224,4 @@ template <class... Ts>
 using single_type = typename detail::single_type<Ts...>::type;
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_

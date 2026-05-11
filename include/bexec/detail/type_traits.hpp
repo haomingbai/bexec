@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_TYPE_TRAITS_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_TYPE_TRAITS_HPP_
+
 #include <bexec/completion_signatures.hpp>
 
 #include <concepts>
@@ -112,3 +115,4 @@ struct empty_callback {
 };
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_TYPE_TRAITS_HPP_

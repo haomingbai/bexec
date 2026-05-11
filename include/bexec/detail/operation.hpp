@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_HPP_
+#define BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_HPP_
+
 #include <bexec/operation_state.hpp>
 
 #include <utility>
@@ -21,3 +24,4 @@ private:
 };
 
 } // namespace bexec::detail
+#endif  // BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_HPP_

@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_OPERATION_STATE_HPP_
+#define BEXEC_INCLUDE_BEXEC_OPERATION_STATE_HPP_
+
 #include <concepts>
 #include <type_traits>
 
@@ -30,3 +33,4 @@ concept operation_state = requires(std::remove_cvref_t<Operation>& operation) {
 };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_OPERATION_STATE_HPP_

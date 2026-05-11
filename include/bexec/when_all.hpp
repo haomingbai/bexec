@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_
+#define BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>
 #include <bexec/detail/config.hpp>
@@ -112,3 +115,4 @@ template <sender... Senders>
 }
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_

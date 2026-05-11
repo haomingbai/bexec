@@ -1,5 +1,8 @@
 #pragma once
 
+#ifndef BEXEC_INCLUDE_BEXEC_SCHEDULER_HPP_
+#define BEXEC_INCLUDE_BEXEC_SCHEDULER_HPP_
+
 #include <bexec/sender.hpp>
 
 #include <concepts>
@@ -35,3 +38,4 @@ concept scheduler =
     };
 
 } // namespace bexec
+#endif  // BEXEC_INCLUDE_BEXEC_SCHEDULER_HPP_

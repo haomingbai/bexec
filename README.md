@@ -65,6 +65,19 @@ The project builds tests and examples by default. Disable them with:
 cmake -S . -B build -DBEXEC_BUILD_TESTS=OFF -DBEXEC_BUILD_EXAMPLES=OFF
 ```
 
+## Formatting
+
+```sh
+scripts/format.sh
+```
+
+The formatter auto-detects existing source directories and applies Google C++
+style with `clang-format`.
+
+Naming intentionally follows the C++ standard library rather than Google C++
+names: use `snake_case` throughout, with trailing underscores for private data
+members.
+
 ## Quick Examples
 
 ```cpp

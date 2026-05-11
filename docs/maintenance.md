@@ -25,6 +25,45 @@ The library is currently header-only. Add `src/` only when there is a concrete
 need for separately compiled implementation. Keep implementation-only helper
 types under `include/bexec/detail/`.
 
+## Naming Style
+
+The project follows standard-library-style naming because bexec intentionally
+resembles C++ vocabulary and execution facilities. Use `snake_case` for public
+APIs, concepts, types, functions, variables, namespaces, and file names rather
+than Google-style `PascalCase` type names.
+
+Private data members use a trailing underscore, for example `receiver_` and
+`operation_`. Avoid leading underscores and names reserved to the implementation.
+
+## Header Protection
+
+All headers use both `#pragma once` and a conventional include guard. Keep
+`#pragma once` as the first line so supporting compilers can take the fast path,
+then place the guard immediately after it as the portable fallback:
+
+```cpp
+#pragma once
+
+#ifndef BEXEC_INCLUDE_BEXEC_EXAMPLE_HPP_
+#define BEXEC_INCLUDE_BEXEC_EXAMPLE_HPP_
+
+// Header contents.
+
+#endif  // BEXEC_INCLUDE_BEXEC_EXAMPLE_HPP_
+```
+
+Guard names are derived from the repository-relative path, uppercased with
+non-alphanumeric characters converted to underscores, and wrapped with the
+`BEXEC_` prefix and trailing underscore.
+
+## Formatting
+
+Run `scripts/format.sh` before submitting broad source changes. The script
+auto-detects existing source directories such as `include/`, `src/`, `tests/`,
+`examples/`, and `benchmarks/`, then formats C and C++ files with
+`clang-format --style=Google`. This controls whitespace and layout only; naming
+still follows the standard-library-style `snake_case` rules above.
+
 ## Adding A Sender
 
 New senders should:

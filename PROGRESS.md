@@ -37,3 +37,29 @@
   - `when_all` currently discards child success values and completes with `set_value()`.
   - `repeat_until` intentionally uses a sender factory and discards child values.
   - The scheduler `run()` drains queued work and returns when the queue is empty; it is not a work-guarded blocking event loop.
+
+## Checkpoint 3: Documentation and final validation
+
+- Completed:
+  - Added README and documentation for usage, design, maintenance, and roadmap.
+  - Documented the member-based CPO/query model and the intentional absence of `tag_invoke`.
+  - Documented receiver ownership, environment/query behavior, stop-token guarantees, scheduler semantics, repeat trampoline behavior, when_all shared-state behavior, coroutine support, and known MVP limitations.
+  - Reconfigured, rebuilt, ran tests, and ran the compiled examples.
+- Files changed:
+  - `README.md`
+  - `docs/usage.md`
+  - `docs/design.md`
+  - `docs/maintenance.md`
+  - `docs/roadmap.md`
+  - `PROGRESS.md`
+- Tests run:
+  - `cmake -S . -B build`
+  - `cmake --build build`
+  - `ctest --test-dir build --output-on-failure`
+  - `./build/examples/bexec_examples`
+- Known limitations/TODOs:
+  - Full P2300 completion signatures are not implemented.
+  - `when_all` still discards child success values and completes all-success with `set_value()`.
+  - `repeat_until` still uses the safer sender-factory form and discards child values.
+  - `io_context::run()` is a drain loop, not a blocking work-guarded event loop.
+  - Coroutine support is limited to `task<T>`/`task<void>` and scheduler resumption.

@@ -1,0 +1,48 @@
+# Roadmap
+
+This roadmap tracks intentional gaps between the MVP and a fuller
+P2300-inspired library.
+
+## Completion Signatures
+
+- Replace the MVP metadata with a richer completion-signature model.
+- Support multiple value alternatives beyond simple `value_signature<Ts...>`.
+- Improve diagnostics when adaptor callables are not invocable for all value
+  signatures.
+
+## when_all Values
+
+- Aggregate successful child values.
+- Preserve tuple structure for zero, one, and many values per child.
+- Define a stable public result shape before exposing it broadly.
+
+## Cancellation
+
+- Expand stop-token integration across all algorithms.
+- Add tests for races between stop request, callback destruction, and
+  asynchronous completion.
+- Consider cancellation-aware scheduler queues.
+
+## Scheduler Features
+
+- Add a blocking `run_forever()` or work-guard model if real applications need
+  a long-running event loop.
+- Add timer support.
+- Add scheduler environment queries beyond `get_stop_token`.
+
+## Coroutines
+
+- Decide whether `task<T>` should become a sender.
+- Add cancellation propagation into coroutine tasks.
+- Add async composition helpers.
+
+## Allocators And ABI
+
+- Add allocator-aware operation-state storage only when required by users.
+- Keep the public ABI header-only until a stable boundary is justified.
+
+## P2300 Compatibility
+
+- Track naming and semantic differences against the standard wording.
+- Add migration notes once mainstream C++26 execution implementations become
+  available.

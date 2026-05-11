@@ -5,10 +5,10 @@ P2300-inspired library.
 
 ## Completion Signatures
 
-- Replace the MVP metadata with a richer completion-signature model.
-- Support multiple value alternatives beyond simple `value_signature<Ts...>`.
-- Improve diagnostics when adaptor callables are not invocable for all value
-  signatures.
+- Expand coverage of P2300-style completion-signature transformations as more
+  adaptors are added.
+- Improve compile-time diagnostics when adaptor callables are not invocable for
+  all `set_value_t(Args...)` alternatives.
 
 ## when_all Values
 

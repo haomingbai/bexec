@@ -1,8 +1,8 @@
 #pragma once
 
-#include <bexec/cpo.hpp>
 #include <bexec/detail/config.hpp>
-#include <bexec/env.hpp>
+#include <bexec/query.hpp>
+#include <bexec/receiver.hpp>
 
 #include <exception>
 #include <functional>
@@ -17,12 +17,12 @@ public:
     then_receiver(Receiver receiver, Fn fn)
         : receiver_(std::move(receiver)), fn_(std::move(fn)) {}
 
-    [[nodiscard]] auto get_env() noexcept(noexcept(bexec::get_env(receiver_))) {
+    [[nodiscard]] auto get_env() const noexcept(noexcept(bexec::get_env(receiver_))) {
         return bexec::get_env(receiver_);
     }
 
     template <class... Args>
-    void set_value(Args&&... args) {
+    void set_value(Args&&... args) noexcept {
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
         try {
 #endif
@@ -35,12 +35,11 @@ public:
     }
 
     template <class Error>
-    void set_error(Error&& error) noexcept(noexcept(bexec::set_error(
-        std::move(receiver_), std::forward<Error>(error)))) {
+    void set_error(Error&& error) noexcept {
         bexec::set_error(std::move(receiver_), std::forward<Error>(error));
     }
 
-    void set_stopped() noexcept(noexcept(bexec::set_stopped(std::move(receiver_)))) {
+    void set_stopped() noexcept {
         bexec::set_stopped(std::move(receiver_));
     }
 

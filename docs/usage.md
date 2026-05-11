@@ -11,15 +11,15 @@ operation eventually delivers exactly one terminal signal to the receiver:
 
 ```cpp
 struct receiver {
-    void set_value(int value) {
+    void set_value(int value) noexcept {
         // use value
     }
 
-    void set_error(std::exception_ptr error) {
+    void set_error(std::exception_ptr error) noexcept {
         // handle error
     }
 
-    void set_stopped() {
+    void set_stopped() noexcept {
         // handle cancellation
     }
 };
@@ -73,10 +73,13 @@ are not supported.
 
 ## Scheduler
 
-`io_context` is a small FIFO event loop. Its scheduler produces senders through
+`io_context` is a small FIFO execution context. Despite the name, it does not
+perform file, socket, or OS IO. Its scheduler produces senders through
 `schedule(scheduler)`.
 
 ```cpp
+#include <bexec/io_context/io_context.hpp>
+
 bexec::io_context context;
 auto sched = context.get_scheduler();
 
@@ -113,8 +116,12 @@ the callback immediately.
 The query model is member-based:
 
 ```cpp
+#include <bexec/query.hpp>
+#include <bexec/receiver.hpp>
+
 auto env = bexec::get_env(receiver);
 auto token = bexec::query(env, bexec::get_stop_token);
+auto same_token = bexec::get_stop_token(env);
 ```
 
 Receivers can expose `get_env()`. If they do not, `get_env(receiver)` returns
@@ -150,6 +157,8 @@ not recursively call `start()` and do not grow the stack per iteration.
 children have completed.
 
 ```cpp
+#include <bexec/io_context/io_context.hpp>
+
 bexec::io_context context;
 auto sched = context.get_scheduler();
 
@@ -172,6 +181,8 @@ are delivered as a `std::variant` of the child error types plus
 `task<T>` is a small lazy coroutine task used with the internal scheduler.
 
 ```cpp
+#include <bexec/io_context/io_context.hpp>
+
 bexec::task<int> run_on_scheduler(bexec::io_context::scheduler sched) {
     co_await sched.schedule_awaitable();
     co_return 42;

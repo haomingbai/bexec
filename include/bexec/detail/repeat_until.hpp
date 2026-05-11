@@ -1,8 +1,10 @@
 #pragma once
 
-#include <bexec/cpo.hpp>
 #include <bexec/detail/config.hpp>
-#include <bexec/env.hpp>
+#include <bexec/operation_state.hpp>
+#include <bexec/query.hpp>
+#include <bexec/receiver.hpp>
+#include <bexec/sender.hpp>
 
 #include <exception>
 #include <functional>
@@ -23,21 +25,21 @@ public:
     explicit repeat_until_child_receiver(parent_type& parent)
         : parent_(&parent) {}
 
-    [[nodiscard]] auto get_env() noexcept {
+    [[nodiscard]] auto get_env() const noexcept {
         return bexec::get_env(parent_->receiver());
     }
 
     template <class... Args>
-    void set_value(Args&&...) noexcept(noexcept(parent_->child_value())) {
+    void set_value(Args&&...) noexcept {
         parent_->child_value();
     }
 
     template <class Error>
-    void set_error(Error&& error) noexcept(noexcept(parent_->child_error(std::forward<Error>(error)))) {
+    void set_error(Error&& error) noexcept {
         parent_->child_error(std::forward<Error>(error));
     }
 
-    void set_stopped() noexcept(noexcept(parent_->child_stopped())) {
+    void set_stopped() noexcept {
         parent_->child_stopped();
     }
 
@@ -60,12 +62,12 @@ public:
 
     Receiver& receiver() noexcept { return receiver_; }
 
-    void start() {
+    void start() noexcept {
         continue_requested_ = true;
         drain();
     }
 
-    void child_value() {
+    void child_value() noexcept {
         child_pending_ = false;
 
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
@@ -90,20 +92,20 @@ public:
     }
 
     template <class Error>
-    void child_error(Error&& error) {
+    void child_error(Error&& error) noexcept {
         child_pending_ = false;
         done_ = true;
         bexec::set_error(std::move(receiver_), std::forward<Error>(error));
     }
 
-    void child_stopped() {
+    void child_stopped() noexcept {
         child_pending_ = false;
         done_ = true;
         bexec::set_stopped(std::move(receiver_));
     }
 
 private:
-    void drain() {
+    void drain() noexcept {
         if (draining_) {
             return;
         }

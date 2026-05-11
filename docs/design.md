@@ -14,7 +14,7 @@ heavy metaprogramming.
 The public concepts are intentionally small:
 
 - `operation_state`: `start(op)` is valid.
-- `sender`: the type is move-constructible and exposes MVP
+- `sender`: the type is move-constructible and exposes P2300-style
   `completion_signatures` metadata.
 - `sender_to`: `connect(sender, receiver)` returns an operation state.
 - `scheduler`: `schedule(scheduler)` returns a sender.
@@ -25,19 +25,22 @@ The public concepts are intentionally small:
 The concepts are compatibility checks for this library, not complete P2300
 semantic contracts.
 
-## CPO And Member Customization
+## CPOs And Member Customization
 
 bexec uses CPO-style function objects, but the customization path is explicitly
 member-based:
 
-- `start(op)` calls `op.start()`.
+- `start(op)` calls `op.start()` on a non-rvalue operation state. The member
+  must be `noexcept` and return `void`.
 - `connect(sender, receiver)` calls `sender.connect(receiver)`.
 - `schedule(scheduler)` calls `scheduler.schedule()`.
-- `set_value(receiver, args...)` calls `receiver.set_value(args...)`.
-- `set_error(receiver, error)` calls `receiver.set_error(error)`.
-- `set_stopped(receiver)` calls `receiver.set_stopped()`.
-- `get_env(receiver)` calls `receiver.get_env()` when available.
-- `query(env, tag)` calls `env.query(tag)`.
+- `set_value(receiver, args...)` calls `receiver.set_value(args...)` on a
+  non-const rvalue receiver. The member must be `noexcept` and return `void`.
+- `set_error(receiver, error)` and `set_stopped(receiver)` follow the same
+  terminal-receiver rule.
+- `get_env(receiver)` calls a const `receiver.get_env()` when available.
+- `query(env, tag)` invokes the query object, so `query(env, get_stop_token)`
+  and `get_stop_token(env)` use the same path.
 
 There is no `tag_invoke` support. This is intentional. It keeps overload
 resolution easy to reason about, keeps diagnostics smaller, and avoids exposing
@@ -45,18 +48,21 @@ unstable implementation hooks while the library is still an MVP.
 
 ## Completion Metadata
 
-`completion_signatures<ValueSignatures, ErrorTypes, SendsStopped>` is a small
-metadata type, not the full P2300 model.
+`completion_signatures<Sigs...>` uses P2300-style function types:
 
-It supports:
+```cpp
+using completions = bexec::completion_signatures<
+    bexec::set_value_t(int),
+    bexec::set_error_t(std::exception_ptr),
+    bexec::set_stopped_t()>;
+```
 
-- value signatures for simple senders such as `just`.
-- declared error types for `when_all` aggregation.
-- a boolean stopped-signal flag.
-
-`then` transforms value signatures for simple invocable cases and adds
-`std::exception_ptr` to possible errors when exceptions are enabled in normal
-C++ builds.
+The public helpers `completion_signatures_of_t`, `value_types_of_t`,
+`error_types_of_t`, and `sends_stopped` inspect this signature pack. `then`
+transforms `set_value_t(Args...)` alternatives for simple invocable cases and
+adds `std::exception_ptr` to possible errors. `when_all` declares the actual
+error it sends: a `std::variant` containing child error alternatives plus
+`std::exception_ptr`.
 
 ## Ownership Model
 
@@ -82,7 +88,7 @@ auto get_env() const;
 The returned environment answers queries through member functions:
 
 ```cpp
-auto query(bexec::get_stop_token_t) const;
+auto query(bexec::get_stop_token_t) const noexcept;
 ```
 
 If a receiver has no `get_env()`, `empty_env` is used. `empty_env` answers
@@ -110,9 +116,13 @@ Threading guarantees:
 Callbacks are expected not to throw. If a callback throws, the implementation
 terminates.
 
-## Scheduler Model
+## io_context Model
 
-`io_context` owns a mutex-protected FIFO queue of `std::function<void()>`.
+`io_context` is a mutex-protected FIFO execution context. The name follows a
+common scheduler/run-loop pattern; this type does not provide file, socket, or
+OS IO operations.
+
+`io_context` owns a FIFO queue of `std::function<void()>`.
 `post` and `enqueue` are thread-safe and return `false` if the context is
 stopped.
 

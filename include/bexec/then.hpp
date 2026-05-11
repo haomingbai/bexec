@@ -2,10 +2,10 @@
 
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>
-#include <bexec/cpo.hpp>
 #include <bexec/detail/operation.hpp>
 #include <bexec/detail/then.hpp>
 #include <bexec/detail/type_traits.hpp>
+#include <bexec/sender.hpp>
 
 #include <concepts>
 #include <type_traits>
@@ -49,10 +49,8 @@ template <sender Sender, class Fn>
 template <class Sender, class Fn>
 class then_sender {
 public:
-    using completion_signatures = bexec::completion_signatures<
-        detail::then_value_signatures_t<Fn, Sender>,
-        detail::sender_errors_with_exception_t<Sender>,
-        detail::sender_sends_stopped_v<Sender>>;
+    using completion_signatures =
+        detail::then_completion_signatures_t<Fn, Sender>;
 
     then_sender(Sender sender, Fn fn)
         : sender_(std::move(sender)), fn_(std::move(fn)) {}

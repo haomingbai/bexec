@@ -5,13 +5,16 @@ It is intended as a temporary, practical bridge while standardized C++26
 execution support becomes widely available in mainstream stable toolchains.
 
 This is not a full P2300 implementation. The current code is an MVP with a
-member-customization API, a small scheduler, basic stop tokens, simple
-environment queries, a few sender factories/adaptors, and focused tests.
+member-customization API, P2300-style completion signatures, a small run-loop
+scheduler, basic stop tokens, simple environment queries, a few sender
+factories/adaptors, and focused tests.
 
 ## What It Is
 
 - A header-only C++20 library with an umbrella header at
   `include/bexec/bexec.hpp` and feature headers under `include/bexec/`.
+- Role-oriented public headers for operation states, receivers, senders,
+  schedulers, queries, and completion signatures.
 - A minimal sender/receiver vocabulary:
   - `start`
   - `connect`
@@ -27,7 +30,9 @@ environment queries, a few sender factories/adaptors, and focused tests.
   - `just_stopped`
   - `then`
   - pipe syntax: `sender | then(fn)`
-- A simple `io_context` scheduler.
+- A simple `io_context` scheduler. Despite the name, it does not implement
+  file, socket, or OS IO; it is a FIFO execution context using the familiar
+  run-loop pattern.
 - Minimal `inplace_stop_source`, `inplace_stop_token`, and
   `inplace_stop_callback`.
 - Minimal environment/query support with `get_env`, `query`,
@@ -41,7 +46,6 @@ environment queries, a few sender factories/adaptors, and focused tests.
 - It is not a complete implementation of P2300.
 - It does not use `tag_invoke`.
 - It does not depend on `stdexec`.
-- It does not implement the full P2300 completion-signatures model.
 - It does not aggregate successful `when_all` values. Successful children are
   currently value-discarding and final completion is `set_value()`.
 - It does not provide allocator customization, domains, bulk execution,
@@ -67,9 +71,9 @@ cmake -S . -B build -DBEXEC_BUILD_TESTS=OFF -DBEXEC_BUILD_EXAMPLES=OFF
 #include <bexec/bexec.hpp>
 
 struct receiver {
-    void set_value(int) {}
-    void set_error(std::exception_ptr) {}
-    void set_stopped() {}
+    void set_value(int) noexcept {}
+    void set_error(std::exception_ptr) noexcept {}
+    void set_stopped() noexcept {}
 };
 
 auto s = bexec::just(1) | bexec::then([](int x) { return x + 1; });
@@ -92,8 +96,9 @@ context.run();
 
 ## Current Limitations
 
-- Receiver customization is member-only: `r.set_value(...)`,
-  `r.set_error(error)`, and `r.set_stopped()`.
+- Receiver customization is member-only and terminal receiver members must be
+  `noexcept`: `r.set_value(...)`, `r.set_error(error)`, and
+  `r.set_stopped()`.
 - Sender customization is member-only: `sender.connect(receiver)`.
 - Scheduler customization is member-only: `scheduler.schedule()`.
 - `repeat_until(factory, predicate)` uses a sender-producing factory. Reusing

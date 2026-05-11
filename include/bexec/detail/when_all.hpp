@@ -1,9 +1,9 @@
 #pragma once
 
-#include <bexec/cpo.hpp>
 #include <bexec/detail/config.hpp>
 #include <bexec/detail/type_traits.hpp>
-#include <bexec/env.hpp>
+#include <bexec/operation_state.hpp>
+#include <bexec/receiver.hpp>
 
 #include <exception>
 #include <memory>
@@ -22,21 +22,21 @@ public:
     explicit when_all_child_receiver(std::shared_ptr<State> state)
         : state_(std::move(state)) {}
 
-    [[nodiscard]] auto get_env() {
+    [[nodiscard]] auto get_env() const noexcept {
         return env_with_stop_token{state_->stop_source.get_token(), bexec::get_env(state_->receiver)};
     }
 
     template <class... Args>
-    void set_value(Args&&...) {
+    void set_value(Args&&...) noexcept {
         state_->child_value();
     }
 
     template <class Error>
-    void set_error(Error&& error) {
+    void set_error(Error&& error) noexcept {
         state_->child_error(std::forward<Error>(error));
     }
 
-    void set_stopped() {
+    void set_stopped() noexcept {
         state_->child_stopped();
     }
 
@@ -49,12 +49,12 @@ struct when_all_state {
     explicit when_all_state(Receiver recv, std::size_t count)
         : receiver(std::move(recv)), remaining(count) {}
 
-    void child_value() {
+    void child_value() noexcept {
         finish_one();
     }
 
     template <class Error>
-    void child_error(Error&& error) {
+    void child_error(Error&& error) noexcept {
         bool request_stop = false;
         {
             std::lock_guard lock(mutex);
@@ -70,7 +70,7 @@ struct when_all_state {
         finish_one();
     }
 
-    void child_stopped() {
+    void child_stopped() noexcept {
         bool request_stop = false;
         {
             std::lock_guard lock(mutex);
@@ -85,7 +85,7 @@ struct when_all_state {
         finish_one();
     }
 
-    void finish_one() {
+    void finish_one() noexcept {
         std::optional<ErrorVariant> error_to_deliver;
         std::optional<Receiver> receiver_to_complete;
         terminal_kind final_terminal = terminal_kind::none;
@@ -117,12 +117,12 @@ struct when_all_state {
         }
     }
 
-    void complete_empty() {
+    void complete_empty() noexcept {
         bexec::set_value(std::move(receiver));
     }
 
     template <class Error>
-    void store_error(Error&& error_value) {
+    void store_error(Error&& error_value) noexcept {
         using error_type = std::decay_t<Error>;
         if constexpr (variant_contains_v<error_type, ErrorVariant>) {
             error.emplace(std::in_place_type<error_type>, std::forward<Error>(error_value));

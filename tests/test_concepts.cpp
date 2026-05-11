@@ -1,8 +1,9 @@
 #include "test_support.hpp"
 
 #include <bexec/concepts.hpp>
-#include <bexec/cpo.hpp>
 #include <bexec/just.hpp>
+#include <bexec/operation_state.hpp>
+#include <bexec/sender.hpp>
 #include <bexec/then.hpp>
 
 #include <memory>

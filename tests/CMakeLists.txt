@@ -1,6 +1,7 @@
 add_executable(
     bexec_tests
     test_main.cpp
+    test_completion_signatures.cpp
     test_concepts.cpp
     test_env.cpp
     test_just.cpp

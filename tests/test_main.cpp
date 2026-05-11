@@ -8,6 +8,7 @@ int failures = 0;
 
 int main() {
     bexec_tests::test_concepts();
+    bexec_tests::test_completion_signatures();
     bexec_tests::test_just();
     bexec_tests::test_then();
     bexec_tests::test_stop_token();

@@ -1,42 +1,13 @@
 #pragma once
 
+#include <bexec/query.hpp>
 #include <bexec/stop_token.hpp>
 
 #include <concepts>
+#include <type_traits>
 #include <utility>
 
 namespace bexec {
-
-/**
- * @brief Query tag used to obtain a stop token from an environment.
- */
-struct get_stop_token_t {};
-
-/**
- * @brief Query tag used to obtain a scheduler from an environment.
- */
-struct get_scheduler_t {};
-
-inline constexpr get_stop_token_t get_stop_token{};
-inline constexpr get_scheduler_t get_scheduler{};
-
-/**
- * @brief Member-based query CPO.
- *
- * query(env, tag) calls env.query(tag). No tag_invoke fallback is provided.
- */
-struct query_t {
-    template <class Env, class QueryTag>
-        requires requires(Env&& env, QueryTag tag) {
-            std::forward<Env>(env).query(tag);
-        }
-    constexpr decltype(auto) operator()(Env&& env, QueryTag tag) const
-        noexcept(noexcept(std::forward<Env>(env).query(tag))) {
-        return std::forward<Env>(env).query(tag);
-    }
-};
-
-inline constexpr query_t query{};
 
 /**
  * @brief Empty environment that provides a never_stop_token.
@@ -61,36 +32,22 @@ public:
         return token_;
     }
 
-    template <class QueryTag>
-        requires(!std::same_as<QueryTag, get_stop_token_t> &&
-                 requires(const BaseEnv& base, QueryTag tag) { bexec::query(base, tag); })
-    decltype(auto) query(QueryTag tag) const
-        noexcept(noexcept(bexec::query(base_, tag))) {
-        return bexec::query(base_, tag);
+    template <class QueryTag, class... Args>
+        requires(!std::same_as<std::remove_cvref_t<QueryTag>, get_stop_token_t> &&
+                 requires(const BaseEnv& base, QueryTag&& tag, Args&&... args) {
+                     bexec::query(base, std::forward<QueryTag>(tag),
+                                  std::forward<Args>(args)...);
+                 })
+    decltype(auto) query(QueryTag&& tag, Args&&... args) const
+        noexcept(noexcept(bexec::query(base_, std::forward<QueryTag>(tag),
+                                       std::forward<Args>(args)...))) {
+        return bexec::query(base_, std::forward<QueryTag>(tag),
+                            std::forward<Args>(args)...);
     }
 
 private:
     inplace_stop_token token_;
     BaseEnv base_;
 };
-
-/**
- * @brief Receiver environment CPO.
- *
- * get_env(receiver) calls receiver.get_env() when available, otherwise returns
- * empty_env.
- */
-struct get_env_t {
-    template <class Receiver>
-    constexpr auto operator()(Receiver&& receiver) const {
-        if constexpr (requires { std::forward<Receiver>(receiver).get_env(); }) {
-            return std::forward<Receiver>(receiver).get_env();
-        } else {
-            return empty_env{};
-        }
-    }
-};
-
-inline constexpr get_env_t get_env{};
 
 } // namespace bexec

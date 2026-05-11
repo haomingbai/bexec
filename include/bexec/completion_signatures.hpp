@@ -1,32 +1,223 @@
 #pragma once
 
-#include <exception>
+#include <concepts>
+#include <cstddef>
+#include <type_traits>
+#include <variant>
 
 namespace bexec {
+
+struct set_value_t;
+struct set_error_t;
+struct set_stopped_t;
 
 template <class... Ts>
 struct type_list {};
 
-/**
- * @brief Describes one set_value completion signature.
- */
-template <class... Ts>
-struct value_signature {};
+namespace detail {
+
+template <class Signature>
+struct is_completion_signature : std::false_type {};
+
+template <class... Args>
+struct is_completion_signature<set_value_t(Args...)>
+    : std::bool_constant<((std::is_object_v<Args> || std::is_reference_v<Args>) && ...)> {};
+
+template <class Error>
+struct is_completion_signature<set_error_t(Error)>
+    : std::bool_constant<std::is_object_v<Error> || std::is_reference_v<Error>> {};
+
+template <>
+struct is_completion_signature<set_stopped_t()> : std::true_type {};
+
+template <class Signature>
+inline constexpr bool is_completion_signature_v =
+    is_completion_signature<Signature>::value;
+
+template <class Tag, class Signature>
+struct completion_signature_matches : std::false_type {};
+
+template <class Tag, class... Args>
+struct completion_signature_matches<Tag, Tag(Args...)> : std::true_type {};
+
+template <class Tag, class Signature>
+inline constexpr bool completion_signature_matches_v =
+    completion_signature_matches<Tag, Signature>::value;
+
+} // namespace detail
 
 /**
- * @brief Minimal completion signature metadata used by this MVP.
- *
- * The type is intentionally smaller than P2300 completion_signatures. It is
- * sufficient for simple value-type discovery, when_all error aggregation, and
- * stopped awareness.
+ * @brief P2300-style completion signature function type.
  */
-template <class ValueSignatures = type_list<value_signature<>>,
-          class ErrorTypes = type_list<std::exception_ptr>,
-          bool SendsStopped = false>
+template <class Signature>
+concept completion_signature = detail::is_completion_signature_v<Signature>;
+
+/**
+ * @brief Encodes the set of completion operations a sender may perform.
+ */
+template <completion_signature... Signatures>
 struct completion_signatures {
-    using value_signatures = ValueSignatures;
-    using error_types = ErrorTypes;
-    static constexpr bool sends_stopped = SendsStopped;
+    template <class Tag>
+    [[nodiscard]] static consteval std::size_t count_of() noexcept {
+        return (std::size_t{0} + ... +
+                (detail::completion_signature_matches_v<Tag, Signatures>
+                     ? std::size_t{1}
+                     : std::size_t{0}));
+    }
+
+    template <class Fn>
+    static constexpr void for_each(Fn&& fn) {
+        (fn(static_cast<Signatures*>(nullptr)), ...);
+    }
 };
+
+template <class>
+struct is_completion_signatures : std::false_type {};
+
+template <class... Signatures>
+struct is_completion_signatures<completion_signatures<Signatures...>> : std::true_type {};
+
+template <class Completions>
+concept valid_completion_signatures = is_completion_signatures<Completions>::value;
+
+namespace detail {
+
+template <class... Lists>
+struct concat_type_lists;
+
+template <>
+struct concat_type_lists<> {
+    using type = type_list<>;
+};
+
+template <class... Ts>
+struct concat_type_lists<type_list<Ts...>> {
+    using type = type_list<Ts...>;
+};
+
+template <class... As, class... Bs, class... Rest>
+struct concat_type_lists<type_list<As...>, type_list<Bs...>, Rest...> {
+    using type = typename concat_type_lists<type_list<As..., Bs...>, Rest...>::type;
+};
+
+template <class... Lists>
+using concat_type_lists_t = typename concat_type_lists<Lists...>::type;
+
+template <class T, class List>
+struct type_list_contains;
+
+template <class T>
+struct type_list_contains<T, type_list<>> : std::false_type {};
+
+template <class T, class Head, class... Tail>
+struct type_list_contains<T, type_list<Head, Tail...>>
+    : std::conditional_t<std::same_as<T, Head>, std::true_type,
+                         type_list_contains<T, type_list<Tail...>>> {};
+
+template <class T, class List>
+inline constexpr bool type_list_contains_v = type_list_contains<T, List>::value;
+
+template <class Seen, class Input>
+struct unique_type_list_impl;
+
+template <class... Seen>
+struct unique_type_list_impl<type_list<Seen...>, type_list<>> {
+    using type = type_list<Seen...>;
+};
+
+template <class... Seen, class Head, class... Tail>
+struct unique_type_list_impl<type_list<Seen...>, type_list<Head, Tail...>> {
+    using next_seen = std::conditional_t<type_list_contains_v<Head, type_list<Seen...>>,
+                                         type_list<Seen...>,
+                                         type_list<Seen..., Head>>;
+    using type = typename unique_type_list_impl<next_seen, type_list<Tail...>>::type;
+};
+
+template <class List>
+using unique_type_list_t = typename unique_type_list_impl<type_list<>, List>::type;
+
+template <class List>
+struct completion_signatures_from_type_list;
+
+template <class... Signatures>
+struct completion_signatures_from_type_list<type_list<Signatures...>> {
+    using type = completion_signatures<Signatures...>;
+};
+
+template <class List>
+using completion_signatures_from_type_list_t =
+    typename completion_signatures_from_type_list<List>::type;
+
+template <class Signature, class Tag, template <class...> class Tuple>
+struct gather_one_signature {
+    using type = type_list<>;
+};
+
+template <class Tag, class... Args, template <class...> class Tuple>
+struct gather_one_signature<Tag(Args...), Tag, Tuple> {
+    using type = type_list<Tuple<Args...>>;
+};
+
+template <class List, template <class...> class Variant>
+struct apply_variant_to_type_list;
+
+template <class... Ts, template <class...> class Variant>
+struct apply_variant_to_type_list<type_list<Ts...>, Variant> {
+    using type = Variant<Ts...>;
+};
+
+template <class Tag, valid_completion_signatures Completions,
+          template <class...> class Tuple, template <class...> class Variant>
+struct gather_signatures;
+
+template <class Tag, class... Signatures, template <class...> class Tuple,
+          template <class...> class Variant>
+struct gather_signatures<Tag, completion_signatures<Signatures...>, Tuple, Variant> {
+    using gathered = concat_type_lists_t<
+        typename gather_one_signature<Signatures, Tag, Tuple>::type...>;
+    using type = typename apply_variant_to_type_list<gathered, Variant>::type;
+};
+
+template <class Tag, valid_completion_signatures Completions,
+          template <class...> class Tuple, template <class...> class Variant>
+using gather_signatures_t =
+    typename gather_signatures<Tag, Completions, Tuple, Variant>::type;
+
+template <class List>
+struct variant_from_type_list;
+
+template <class... Ts>
+struct variant_from_type_list<type_list<Ts...>> {
+    using type = std::variant<Ts...>;
+};
+
+template <class List>
+using variant_from_type_list_t = typename variant_from_type_list<List>::type;
+
+template <class... Ts>
+struct variant_or_empty {
+    using type = std::variant<Ts...>;
+};
+
+template <>
+struct variant_or_empty<> {
+    using type = type_list<>;
+};
+
+template <class... Ts>
+struct single_type;
+
+template <class T>
+struct single_type<T> {
+    using type = T;
+};
+
+} // namespace detail
+
+template <class... Ts>
+using variant_or_empty = typename detail::variant_or_empty<Ts...>::type;
+
+template <class... Ts>
+using single_type = typename detail::single_type<Ts...>::type;
 
 } // namespace bexec

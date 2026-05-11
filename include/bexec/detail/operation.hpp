@@ -1,6 +1,6 @@
 #pragma once
 
-#include <bexec/cpo.hpp>
+#include <bexec/operation_state.hpp>
 
 #include <utility>
 
@@ -12,7 +12,7 @@ public:
     explicit pass_through_operation(Operation operation)
         : operation_(std::move(operation)) {}
 
-    void start() {
+    void start() noexcept {
         bexec::start(operation_);
     }
 

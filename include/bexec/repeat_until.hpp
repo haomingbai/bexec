@@ -3,6 +3,7 @@
 #include <bexec/completion_signatures.hpp>
 #include <bexec/detail/repeat_until.hpp>
 #include <bexec/detail/type_traits.hpp>
+#include <bexec/receiver.hpp>
 
 #include <concepts>
 #include <functional>
@@ -21,10 +22,11 @@ template <class Factory, class Predicate>
 class repeat_until_sender {
 public:
     using sender_type = std::invoke_result_t<Factory&>;
-    using completion_signatures = bexec::completion_signatures<
-        type_list<value_signature<>>,
-        detail::sender_errors_with_exception_t<sender_type>,
-        true>;
+    using completion_signatures = detail::completion_signatures_from_type_list_t<
+        detail::concat_type_lists_t<
+            type_list<set_value_t(), set_stopped_t()>,
+            detail::set_error_signatures_from_type_list_t<
+                detail::sender_errors_with_exception_t<sender_type>>>>;
 
     repeat_until_sender(Factory factory, Predicate predicate)
         : factory_(std::move(factory)), predicate_(std::move(predicate)) {}

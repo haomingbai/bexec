@@ -5,6 +5,7 @@
 #include <bexec/detail/config.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/detail/when_all.hpp>
+#include <bexec/receiver.hpp>
 
 #include <concepts>
 #include <exception>
@@ -28,9 +29,9 @@ class when_all_sender {
 public:
     using error_variant = detail::when_all_error_variant_t<Senders...>;
     using completion_signatures =
-        bexec::completion_signatures<type_list<value_signature<>>,
-                                      detail::when_all_error_list_t<Senders...>,
-                                      true>;
+        bexec::completion_signatures<set_value_t(),
+                                      set_error_t(error_variant),
+                                      set_stopped_t()>;
 
     explicit when_all_sender(Senders... senders)
         : senders_(std::move(senders)...) {}
@@ -48,7 +49,7 @@ public:
             : senders_(std::move(senders)),
               state_(std::make_shared<state_type>(std::move(receiver), sizeof...(Senders))) {}
 
-        void start() {
+        void start() noexcept {
             if constexpr (sizeof...(Senders) == 0) {
                 state_->complete_empty();
             } else {
@@ -58,12 +59,12 @@ public:
 
     private:
         template <std::size_t... Indices>
-        void start_all(std::index_sequence<Indices...>) {
+        void start_all(std::index_sequence<Indices...>) noexcept {
             (start_one<Indices>(), ...);
         }
 
         template <std::size_t Index>
-        void start_one() {
+        void start_one() noexcept {
             using child_receiver =
                 detail::when_all_child_receiver<Index, state_type>;
             auto& slot = std::get<Index>(operations_);

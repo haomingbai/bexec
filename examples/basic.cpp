@@ -7,20 +7,20 @@
 namespace {
 
 struct print_receiver {
-    void set_value() {
+    void set_value() noexcept {
         std::cout << "completed\n";
     }
 
-    void set_value(int value) {
+    void set_value(int value) noexcept {
         std::cout << "value: " << value << '\n';
     }
 
     template <class Error>
-    void set_error(Error&&) {
+    void set_error(Error&&) noexcept {
         std::cout << "error\n";
     }
 
-    void set_stopped() {
+    void set_stopped() noexcept {
         std::cout << "stopped\n";
     }
 };

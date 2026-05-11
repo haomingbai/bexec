@@ -1,7 +1,8 @@
 #pragma once
 
 #include <bexec/completion_signatures.hpp>
-#include <bexec/cpo.hpp>
+#include <bexec/operation_state.hpp>
+#include <bexec/receiver.hpp>
 
 #include <tuple>
 #include <type_traits>
@@ -16,7 +17,7 @@ template <class... Values>
 class just_sender {
 public:
     using completion_signatures =
-        bexec::completion_signatures<type_list<value_signature<Values...>>, type_list<>, false>;
+        bexec::completion_signatures<set_value_t(Values...)>;
 
     explicit just_sender(Values... values)
         : values_(std::move(values)...) {}
@@ -28,7 +29,7 @@ public:
             : values_(std::move(values)), receiver_(std::move(receiver)) {}
 
         /** @brief Completes synchronously with set_value(values...). */
-        void start() {
+        void start() noexcept {
             std::apply(
                 [this](auto&... values) {
                     bexec::set_value(std::move(receiver_), std::move(values)...);
@@ -71,7 +72,7 @@ template <class Error>
 class just_error_sender {
 public:
     using completion_signatures =
-        bexec::completion_signatures<type_list<>, type_list<Error>, false>;
+        bexec::completion_signatures<set_error_t(Error)>;
 
     explicit just_error_sender(Error error)
         : error_(std::move(error)) {}
@@ -83,7 +84,7 @@ public:
             : error_(std::move(error)), receiver_(std::move(receiver)) {}
 
         /** @brief Completes synchronously with set_error(error). */
-        void start() {
+        void start() noexcept {
             bexec::set_error(std::move(receiver_), std::move(error_));
         }
 
@@ -120,7 +121,7 @@ template <class Error>
  */
 class just_stopped_sender {
 public:
-    using completion_signatures = bexec::completion_signatures<type_list<>, type_list<>, true>;
+    using completion_signatures = bexec::completion_signatures<set_stopped_t()>;
 
     template <class Receiver>
     class operation {
@@ -129,7 +130,7 @@ public:
             : receiver_(std::move(receiver)) {}
 
         /** @brief Completes synchronously with set_stopped(). */
-        void start() {
+        void start() noexcept {
             bexec::set_stopped(std::move(receiver_));
         }
 

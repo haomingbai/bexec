@@ -16,71 +16,6 @@ inline constexpr bool dependent_false = false;
 template <class T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
-template <class... Lists>
-struct concat_type_lists;
-
-template <>
-struct concat_type_lists<> {
-    using type = type_list<>;
-};
-
-template <class... Ts>
-struct concat_type_lists<type_list<Ts...>> {
-    using type = type_list<Ts...>;
-};
-
-template <class... As, class... Bs, class... Rest>
-struct concat_type_lists<type_list<As...>, type_list<Bs...>, Rest...> {
-    using type = typename concat_type_lists<type_list<As..., Bs...>, Rest...>::type;
-};
-
-template <class... Lists>
-using concat_type_lists_t = typename concat_type_lists<Lists...>::type;
-
-template <class T, class List>
-struct type_list_contains;
-
-template <class T>
-struct type_list_contains<T, type_list<>> : std::false_type {};
-
-template <class T, class Head, class... Tail>
-struct type_list_contains<T, type_list<Head, Tail...>>
-    : std::conditional_t<std::same_as<T, Head>, std::true_type,
-                         type_list_contains<T, type_list<Tail...>>> {};
-
-template <class T, class List>
-inline constexpr bool type_list_contains_v = type_list_contains<T, List>::value;
-
-template <class Seen, class Input>
-struct unique_type_list_impl;
-
-template <class... Seen>
-struct unique_type_list_impl<type_list<Seen...>, type_list<>> {
-    using type = type_list<Seen...>;
-};
-
-template <class... Seen, class Head, class... Tail>
-struct unique_type_list_impl<type_list<Seen...>, type_list<Head, Tail...>> {
-    using next_seen = std::conditional_t<type_list_contains_v<Head, type_list<Seen...>>,
-                                         type_list<Seen...>,
-                                         type_list<Seen..., Head>>;
-    using type = typename unique_type_list_impl<next_seen, type_list<Tail...>>::type;
-};
-
-template <class List>
-using unique_type_list_t = typename unique_type_list_impl<type_list<>, List>::type;
-
-template <class List>
-struct variant_from_type_list;
-
-template <class... Ts>
-struct variant_from_type_list<type_list<Ts...>> {
-    using type = std::variant<Ts...>;
-};
-
-template <class List>
-using variant_from_type_list_t = typename variant_from_type_list<List>::type;
-
 template <class T, class Variant>
 struct variant_contains;
 
@@ -100,42 +35,77 @@ template <class Sender>
 using sender_completion_signatures_t = typename sender_completion_signatures<Sender>::type;
 
 template <class Sender>
-using sender_error_types_t = typename sender_completion_signatures_t<Sender>::error_types;
-
-template <class Sender>
-using sender_value_signatures_t = typename sender_completion_signatures_t<Sender>::value_signatures;
+using sender_error_types_t =
+    gather_signatures_t<set_error_t, sender_completion_signatures_t<Sender>,
+                        bexec::single_type, type_list>;
 
 template <class Sender>
 inline constexpr bool sender_sends_stopped_v =
-    sender_completion_signatures_t<Sender>::sends_stopped;
+    (sender_completion_signatures_t<Sender>::template count_of<set_stopped_t>() != 0);
 
 template <class Fn, class Signature>
-struct then_value_signature;
+struct then_signature;
 
-template <class Fn, class... Args>
-struct then_value_signature<Fn, value_signature<Args...>> {
-    using invoke_result = std::invoke_result_t<Fn&, Args...>;
-    using type = std::conditional_t<std::is_void_v<invoke_result>,
-                                    value_signature<>,
-                                    value_signature<std::decay_t<invoke_result>>>;
+template <class Result>
+struct then_value_signature_result {
+    using type = set_value_t(std::decay_t<Result>);
 };
 
-template <class Fn, class ValueSignatures>
-struct then_value_signatures;
+template <>
+struct then_value_signature_result<void> {
+    using type = set_value_t();
+};
+
+template <class Fn, class... Args>
+struct then_signature<Fn, set_value_t(Args...)> {
+    using invoke_result = std::invoke_result_t<Fn&, Args...>;
+    using signature = typename then_value_signature_result<invoke_result>::type;
+    using type = type_list<signature>;
+};
+
+template <class Fn, class Error>
+struct then_signature<Fn, set_error_t(Error)> {
+    using type = type_list<set_error_t(Error)>;
+};
+
+template <class Fn>
+struct then_signature<Fn, set_stopped_t()> {
+    using type = type_list<set_stopped_t()>;
+};
+
+template <class Fn, class Completions>
+struct then_completion_signatures;
 
 template <class Fn, class... Signatures>
-struct then_value_signatures<Fn, type_list<Signatures...>> {
-    using type = type_list<typename then_value_signature<Fn, Signatures>::type...>;
+struct then_completion_signatures<Fn, completion_signatures<Signatures...>> {
+    using transformed =
+        concat_type_lists_t<typename then_signature<Fn, Signatures>::type...>;
+    using with_exception =
+        unique_type_list_t<concat_type_lists_t<transformed,
+                                               type_list<set_error_t(std::exception_ptr)>>>;
+    using type = completion_signatures_from_type_list_t<with_exception>;
 };
 
 template <class Fn, class Sender>
-using then_value_signatures_t =
-    typename then_value_signatures<Fn, sender_value_signatures_t<Sender>>::type;
+using then_completion_signatures_t =
+    typename then_completion_signatures<Fn, sender_completion_signatures_t<Sender>>::type;
 
 template <class Sender>
 using sender_errors_with_exception_t =
     unique_type_list_t<concat_type_lists_t<sender_error_types_t<Sender>,
                                            type_list<std::exception_ptr>>>;
+
+template <class ErrorList>
+struct set_error_signatures_from_type_list;
+
+template <class... Errors>
+struct set_error_signatures_from_type_list<type_list<Errors...>> {
+    using type = type_list<set_error_t(Errors)...>;
+};
+
+template <class ErrorList>
+using set_error_signatures_from_type_list_t =
+    typename set_error_signatures_from_type_list<ErrorList>::type;
 
 struct empty_callback {
     void operator()() const noexcept {}

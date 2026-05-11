@@ -1,9 +1,9 @@
 #pragma once
 
 #include <bexec/completion_signatures.hpp>
-#include <bexec/cpo.hpp>
 #include <bexec/detail/config.hpp>
-#include <bexec/env.hpp>
+#include <bexec/query.hpp>
+#include <bexec/receiver.hpp>
 
 #include <exception>
 #include <memory>
@@ -19,9 +19,9 @@ namespace bexec::detail {
 class schedule_sender {
 public:
     using completion_signatures =
-        bexec::completion_signatures<type_list<value_signature<>>,
-                                      type_list<std::exception_ptr>,
-                                      true>;
+        bexec::completion_signatures<set_value_t(),
+                                      set_error_t(std::exception_ptr),
+                                      set_stopped_t()>;
 
     explicit schedule_sender(io_context& context)
         : context_(&context) {}
@@ -32,7 +32,7 @@ public:
         operation(io_context& context, Receiver receiver)
             : context_(&context), receiver_(std::move(receiver)) {}
 
-        void start() {
+        void start() noexcept {
             auto token = bexec::query(bexec::get_env(*receiver_), bexec::get_stop_token);
             if (token.stop_requested()) {
                 bexec::set_stopped(std::move(*receiver_));
@@ -41,10 +41,14 @@ public:
             }
 
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+            std::shared_ptr<Receiver> receiver;
             try {
-#endif
+                receiver = std::make_shared<Receiver>(std::move(*receiver_));
+                receiver_.reset();
+#else
                 auto receiver = std::make_shared<Receiver>(std::move(*receiver_));
                 receiver_.reset();
+#endif
 
                 const bool queued = context_->post([receiver]() mutable {
                     auto inner_token =
@@ -61,8 +65,12 @@ public:
                 }
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
             } catch (...) {
-                bexec::set_error(std::move(*receiver_), std::current_exception());
-                receiver_.reset();
+                if (receiver) {
+                    bexec::set_error(std::move(*receiver), std::current_exception());
+                } else {
+                    bexec::set_error(std::move(*receiver_), std::current_exception());
+                    receiver_.reset();
+                }
             }
 #endif
         }

@@ -1,6 +1,6 @@
 #include "test_support.hpp"
 
-#include <bexec/scheduler.hpp>
+#include <bexec/io_context/io_context.hpp>
 #include <bexec/task.hpp>
 
 namespace bexec_tests {

@@ -3,7 +3,15 @@
 ## Code Layout
 
 - `include/bexec/bexec.hpp`: public umbrella header.
-- `include/bexec/*.hpp`: public feature headers.
+- `include/bexec/completion_signatures.hpp`: P2300-style completion signature
+  pack and helper type-list utilities.
+- `include/bexec/operation_state.hpp`, `receiver.hpp`, `sender.hpp`,
+  `scheduler.hpp`, and `query.hpp`: role-oriented public vocabulary headers.
+- `include/bexec/cpo.hpp`: aggregate include for CPO entities only; keep
+  feature implementations in their role or feature headers.
+- `include/bexec/io_context/`: the FIFO execution context and its related
+  detail helpers.
+- `include/bexec/*.hpp`: other public feature headers.
 - `include/bexec/detail/*.hpp`: implementation helpers that are not part of
   the public API contract.
 - `tests/test_main.cpp`: CTest executable entry point.
@@ -22,9 +30,10 @@ types under `include/bexec/detail/`.
 New senders should:
 
 1. Own the data needed to create an operation state.
-2. Expose `using completion_signatures = ...`.
+2. Expose P2300-style `using completion_signatures =
+   bexec::completion_signatures<set_value_t(...), set_error_t(...), ...>`.
 3. Provide `connect(receiver)` overloads.
-4. Return an operation state with a `start()` member.
+4. Return an operation state with a `noexcept void start()` member.
 5. Deliver exactly one terminal receiver signal.
 
 Prefer rvalue `connect` for move-only state and const lvalue `connect` only
@@ -54,6 +63,9 @@ auto schedule() const;
 The returned sender should complete on the scheduler's execution context.
 Document whether scheduling is FIFO, thread-safe, blocking, inline-capable, or
 best-effort.
+
+Do not use the `io_context` directory as a place for general IO utilities. In
+this project it names the run-loop pattern only.
 
 If the scheduler can observe cancellation, check the receiver environment's
 `get_stop_token` before delivering `set_value()`.

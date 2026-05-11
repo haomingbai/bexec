@@ -1,8 +1,9 @@
 #include "test_support.hpp"
 
-#include <bexec/cpo.hpp>
 #include <bexec/env.hpp>
-#include <bexec/scheduler.hpp>
+#include <bexec/io_context/io_context.hpp>
+#include <bexec/operation_state.hpp>
+#include <bexec/sender.hpp>
 
 #include <memory>
 

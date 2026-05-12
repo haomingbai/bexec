@@ -1,3 +1,15 @@
+# @file .gitignore
+# @brief Ignore generated build products and local tool artifacts.
+# @author Haoming Bai <haomingbai@hotmail.com>
+# @date   2026-05-12
+#
+# Copyright © 2026 Haoming Bai
+# SPDX-License-Identifier: MIT
+#
+# @details
+# Defines repository-level ignore rules for CMake build trees, compiled
+# objects, libraries, executables, and local test output.
+
 build/
 CMakeFiles/
 CMakeCache.txt

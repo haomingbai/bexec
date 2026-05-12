@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/scheduler.hpp
+ * @brief Scheduler customization point and concept.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines bexec::schedule and the scheduler concept for copyable, equality-
+ * comparable scheduler handles that produce scheduling senders.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_SCHEDULER_HPP_

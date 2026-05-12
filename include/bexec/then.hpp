@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/then.hpp
+ * @brief Public then sender adaptor.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines the pipeable and direct then adaptor that transforms set_value
+ * completions through a callable while forwarding error and stopped
+ * completions.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_THEN_HPP_

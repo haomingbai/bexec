@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/operation_state.hpp
+ * @brief Operation-state start customization point and concept.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines bexec::start and the operation_state concept for types that expose
+ * a noexcept void start() member.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_OPERATION_STATE_HPP_

@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/env.hpp
+ * @brief Environment helpers for stop-token-aware receivers.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines empty_env and env_with_stop_token so receivers and algorithms can
+ * answer get_stop_token while delegating other queries.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_ENV_HPP_

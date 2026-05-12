@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/stop_token.hpp
+ * @brief Lightweight stop-token, stop-source, and callback types.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines never_stop_token plus inplace_stop_source, inplace_stop_token, and
+ * inplace_stop_callback for cooperative cancellation in schedulers and
+ * algorithms.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_

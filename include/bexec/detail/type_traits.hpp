@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/detail/type_traits.hpp
+ * @brief Internal template utilities for sender/adaptor metadata.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Provides cvref removal, variant membership checks, signature gathering
+ * helpers, then completion transformations, and shared type-list helpers for
+ * algorithms.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_TYPE_TRAITS_HPP_

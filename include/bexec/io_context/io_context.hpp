@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/io_context/io_context.hpp
+ * @brief FIFO execution context and scheduler implementation.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines the mutex-protected run loop, posting APIs, scheduler handle,
+ * schedule sender integration, and coroutine awaitable used by examples and
+ * tests.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_IO_CONTEXT_IO_CONTEXT_HPP_

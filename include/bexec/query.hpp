@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/query.hpp
+ * @brief Environment query customization points and query tags.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines get_stop_token, get_scheduler, and query so environments can answer
+ * member-based queries with sensible stop-token fallback behavior.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_QUERY_HPP_

@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_then.cpp
+ * @brief Tests the then sender adaptor.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Exercises value transformation, void-returning callables, exception-to-
+ * error conversion, pipe syntax, and direct adaptor usage.
+ */
+
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/sender.hpp>

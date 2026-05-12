@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/detail/operation.hpp
+ * @brief Internal operation-state forwarding helper.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Provides a thin operation wrapper that forwards start() to an owned child
+ * operation through bexec::start.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_HPP_

@@ -1,12 +1,22 @@
+/**
+ * @file include/bexec/cpo.hpp
+ * @brief Aggregate header for bexec customization point objects.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Re-exports the member-based customization point objects for starting
+ * operations, connecting senders, delivering receiver completions,
+ * scheduling, and querying environments.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_CPO_HPP_
 #define BEXEC_INCLUDE_BEXEC_CPO_HPP_
-
-/**
- * @file cpo.hpp
- * @brief Aggregate header for bexec customization point objects.
- */
 
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>

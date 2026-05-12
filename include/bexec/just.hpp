@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/just.hpp
+ * @brief Synchronous sender factories for immediate completions.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines just, just_error, and just_stopped senders that complete
+ * synchronously with value, error, or stopped receiver signals.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_JUST_HPP_

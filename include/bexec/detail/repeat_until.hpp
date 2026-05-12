@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/detail/repeat_until.hpp
+ * @brief Internal repeat_until operation state machine.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Implements the trampoline-based loop that creates fresh child senders,
+ * handles synchronous and asynchronous completion, propagates cancellation,
+ * and completes the final receiver.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_REPEAT_UNTIL_HPP_

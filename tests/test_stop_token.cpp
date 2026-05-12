@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_stop_token.cpp
+ * @brief Tests inplace stop-token primitives.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies never_stop_token, stop requests, callback registration, late
+ * registration, callback deactivation, and one-shot invocation behavior.
+ */
+
 #include <bexec/stop_token.hpp>
 
 #include "test_support.hpp"

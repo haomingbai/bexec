@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_support.hpp
+ * @brief Shared test assertions, receivers, and declarations.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Provides the CHECK macro, common receiver state, reusable receiver types,
+ * and declarations for each test module.
+ */
+
 #pragma once
 
 #ifndef BEXEC_TESTS_TEST_SUPPORT_HPP_

@@ -1,3 +1,17 @@
+/**
+ * @file examples/basic.cpp
+ * @brief Executable example covering the main bexec features.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Demonstrates just, then, io_context scheduling, repeat_until, when_all, and
+ * coroutine scheduler awaitables.
+ */
+
 #include <bexec/bexec.hpp>
 #include <iostream>
 #include <memory>

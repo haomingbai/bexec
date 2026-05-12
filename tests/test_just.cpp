@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_just.cpp
+ * @brief Tests synchronous just-family senders.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Exercises just, just_error, just_stopped, move-only value delivery,
+ * copyable lvalue connection, and terminal receiver signals.
+ */
+
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/sender.hpp>

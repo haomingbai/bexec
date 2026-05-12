@@ -1,3 +1,15 @@
+# @file CMakeLists.txt
+# @brief Top-level CMake build definition for bexec.
+# @author Haoming Bai <haomingbai@hotmail.com>
+# @date   2026-05-12
+#
+# Copyright © 2026 Haoming Bai
+# SPDX-License-Identifier: MIT
+#
+# @details
+# Declares the header-only interface target, public include directories, C++20
+# requirement, and optional tests and examples.
+
 cmake_minimum_required(VERSION 3.20)
 
 project(

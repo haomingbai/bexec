@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_scheduler.cpp
+ * @brief Tests io_context scheduling behavior.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Exercises FIFO queue execution, stopped/restarted state, scheduler
+ * equality, scheduled sender completion, and cancellation-aware scheduling.
+ */
+
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/scheduler.hpp>

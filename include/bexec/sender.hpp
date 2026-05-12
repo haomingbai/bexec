@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/sender.hpp
+ * @brief Sender customization point, metadata helpers, and concepts.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines bexec::connect, completion metadata extraction, value/error/stopped
+ * introspection helpers, and sender/sender_to concepts.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_SENDER_HPP_

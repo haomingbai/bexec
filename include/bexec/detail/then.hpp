@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/detail/then.hpp
+ * @brief Internal receiver adapter for then.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Wraps a downstream receiver, invokes the user callable on value completion,
+ * forwards errors and stopped signals, and reports thrown exceptions when
+ * exceptions are enabled.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_THEN_HPP_

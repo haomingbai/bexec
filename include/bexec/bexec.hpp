@@ -1,15 +1,21 @@
+/**
+ * @file include/bexec/bexec.hpp
+ * @brief Umbrella header for the bexec sender/receiver library.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Includes the public vocabulary, factories, adaptors, algorithms, stop-token
+ * utilities, coroutine task, and io_context scheduler headers.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
 #define BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
-
-/**
- * @file bexec.hpp
- * @brief Umbrella header for the bexec sender/receiver library.
- *
- * bexec is intentionally member-customization based. It does not use
- * tag_invoke and it does not depend on stdexec.
- */
 
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>

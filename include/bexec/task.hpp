@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/task.hpp
+ * @brief Small lazy coroutine task type.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines task<T> and task<void> for examples and scheduler awaitable tests,
+ * including stored result and exception handling.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_TASK_HPP_

@@ -1,3 +1,15 @@
+# @file tests/CMakeLists.txt
+# @brief CMake target definition for bexec tests.
+# @author Haoming Bai <haomingbai@hotmail.com>
+# @date   2026-05-12
+#
+# Copyright © 2026 Haoming Bai
+# SPDX-License-Identifier: MIT
+#
+# @details
+# Builds the single bexec_tests executable from all test modules, links it to
+# the interface library, and registers it with CTest.
+
 add_executable(
     bexec_tests
     test_main.cpp

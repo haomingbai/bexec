@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/detail/when_all.hpp
+ * @brief Internal shared-state helpers for when_all.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines child receivers, final aggregation state, child operation tuple
+ * construction, and error-variant metadata for the when_all algorithm.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_

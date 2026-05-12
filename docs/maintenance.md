@@ -37,11 +37,25 @@ Private data members use a trailing underscore, for example `receiver_` and
 
 ## Header Protection
 
-All headers use both `#pragma once` and a conventional include guard. Keep
-`#pragma once` as the first line so supporting compilers can take the fast path,
-then place the guard immediately after it as the portable fallback:
+All headers use a Doxygen file header, `#pragma once`, and a conventional
+include guard. Keep the file header first so copyright and file-purpose
+metadata are visible at the top, then place `#pragma once` and the guard
+immediately after it:
 
 ```cpp
+/**
+ * @file include/bexec/example.hpp
+ * @brief Example header summary.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Briefly describes the primary purpose of this header.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_EXAMPLE_HPP_

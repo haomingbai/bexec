@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_main.cpp
+ * @brief Test executable entry point.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Runs every bexec test module, reports accumulated assertion failures, and
+ * returns a CTest-compatible status code.
+ */
+
 #include <iostream>
 
 #include "test_support.hpp"

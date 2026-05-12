@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_completion_signatures.cpp
+ * @brief Tests completion-signature metadata helpers.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies valid signature packs, value/error/stopped introspection, and type
+ * aggregation behavior used by senders and adaptors.
+ */
+
 #include <bexec/completion_signatures.hpp>
 #include <bexec/env.hpp>
 #include <bexec/just.hpp>

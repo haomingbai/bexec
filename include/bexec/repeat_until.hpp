@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/repeat_until.hpp
+ * @brief Public repeat_until sender algorithm.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines the sender facade and factory function that repeat freshly-created
+ * child senders until a predicate succeeds while discarding child values.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_REPEAT_UNTIL_HPP_

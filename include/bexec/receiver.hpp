@@ -1,3 +1,17 @@
+/**
+ * @file include/bexec/receiver.hpp
+ * @brief Receiver completion customization points and concepts.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines set_value, set_error, set_stopped, get_env, receiver, and
+ * receiver_of for member-based terminal signal delivery.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_RECEIVER_HPP_

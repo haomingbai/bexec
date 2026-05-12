@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_repeat_until.cpp
+ * @brief Tests the repeat_until sender algorithm.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies repeated synchronous work, error and stopped propagation,
+ * cancellation checks, and scheduler-based asynchronous repetition.
+ */
+
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>

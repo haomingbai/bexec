@@ -1,4 +1,17 @@
 #!/usr/bin/env bash
+#
+# @file scripts/format.sh
+# @brief Source formatter entry point for bexec.
+# @author Haoming Bai <haomingbai@hotmail.com>
+# @date   2026-05-12
+#
+# Copyright © 2026 Haoming Bai
+# SPDX-License-Identifier: MIT
+#
+# @details
+# Finds C and C++ source files in existing source directories and formats them
+# with clang-format using Google style.
+
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"

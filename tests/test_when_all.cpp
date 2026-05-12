@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_when_all.cpp
+ * @brief Tests the when_all sender algorithm.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies all-success completion, error variant aggregation, first-error
+ * selection, stopped propagation, and scheduler-based child completion.
+ */
+
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>

@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/when_all.hpp
+ * @brief Public when_all sender algorithm.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines a sender that starts all child senders, waits for every started
+ * child to finish, discards success values, and propagates the first error or
+ * stopped signal.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_

@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_concepts.cpp
+ * @brief Tests the public concept vocabulary.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Exercises operation_state, receiver, sender, sender_to, scheduler,
+ * stop_token, and stop_source concept checks.
+ */
+
 #include <bexec/concepts.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>

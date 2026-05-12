@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/io_context/detail/schedule_sender.hpp
+ * @brief Internal sender returned by io_context schedulers.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Posts receiver completion to an io_context, observes stop tokens before and
+ * after enqueueing, and reports enqueue/allocation failures as stopped or
+ * error completions.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_IO_CONTEXT_DETAIL_SCHEDULE_SENDER_HPP_

@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_env.cpp
+ * @brief Tests receiver environment and query behavior.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies empty_env, get_env fallback behavior, env_with_stop_token,
+ * get_stop_token, and delegated environment queries.
+ */
+
 #include <bexec/env.hpp>
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/operation_state.hpp>

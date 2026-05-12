@@ -1,3 +1,18 @@
+/**
+ * @file include/bexec/completion_signatures.hpp
+ * @brief Completion-signature metadata and type-list utilities.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Defines P2300-style completion signature validation, completion_signatures
+ * packs, type-list helpers, and signature introspection utilities used by
+ * senders and adaptors.
+ */
+
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_

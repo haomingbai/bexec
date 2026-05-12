@@ -1,3 +1,17 @@
+/**
+ * @file tests/test_task.cpp
+ * @brief Tests coroutine task support.
+ * @author Haoming Bai <haomingbai@hotmail.com>
+ * @date   2026-05-12
+ *
+ * Copyright © 2026 Haoming Bai
+ * SPDX-License-Identifier: MIT
+ *
+ * @details
+ * Verifies task<T>, task<void>, result handling, exception propagation when
+ * enabled, and scheduler awaitable resumption.
+ */
+
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/task.hpp>
 

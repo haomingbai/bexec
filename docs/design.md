@@ -40,7 +40,8 @@ member-based:
   terminal-receiver rule.
 - `get_env(receiver)` calls a const `receiver.get_env()` when available.
 - `query(env, tag)` invokes the query object, so `query(env, get_stop_token)`
-  and `get_stop_token(env)` use the same path.
+  and `get_stop_token(env)` use the same path. `get_allocator` follows the
+  same query path and falls back to `std::allocator<std::byte>`.
 
 There is no `tag_invoke` support. This is intentional. It keeps overload
 resolution easy to reason about, keeps diagnostics smaller, and avoids exposing
@@ -77,6 +78,15 @@ itself stores shared state.
 Operation states are single-start objects. Starting an operation more than once
 is outside the supported contract.
 
+Operation states are not required to be copyable or movable. Implementations
+that contain queued callbacks or child receivers pointing into their own state
+delete copy and move operations.
+
+For asynchronous senders, the operation state is expected to remain alive until
+the terminal signal is delivered. Internal queued callbacks may therefore keep
+pointers into their operation state; they must not move receivers into detached
+shared ownership to extend lifetime beyond the operation.
+
 ## Environment Model
 
 The environment model is deliberately simple. A receiver may provide:
@@ -89,10 +99,12 @@ The returned environment answers queries through member functions:
 
 ```cpp
 auto query(bexec::get_stop_token_t) const noexcept;
+auto query(bexec::get_allocator_t) const noexcept;
 ```
 
 If a receiver has no `get_env()`, `empty_env` is used. `empty_env` answers
-`get_stop_token` with `never_stop_token`.
+`get_stop_token` with `never_stop_token` and `get_allocator` with
+`std::allocator<std::byte>`.
 
 `env_with_stop_token<BaseEnv>` overrides `get_stop_token` and delegates other
 queries to the wrapped environment. `when_all` uses this to give children a
@@ -134,7 +146,9 @@ waiting for future work after the queue becomes empty.
 `schedule(scheduler)` returns a sender that posts receiver completion to the
 context. If the receiver's stop token is already requested, it completes with
 `set_stopped()` without posting. The posted handler checks the stop token again
-before delivering `set_value()`.
+before delivering `set_value()`. The posted handler captures a pointer to the
+operation state; the receiver remains stored in that operation state until
+completion.
 
 ## repeat_until State Machine
 
@@ -158,9 +172,9 @@ small trampoline:
 Child values are discarded. Errors and stopped signals are propagated.
 Cancellation is checked through the receiver environment before each iteration.
 
-## when_all Shared State
+## when_all Operation State
 
-`when_all` stores shared state containing:
+`when_all` stores operation-owned state containing:
 
 - the final receiver,
 - a remaining-child count,
@@ -168,6 +182,10 @@ Cancellation is checked through the receiver environment before each iteration.
 - an internal `inplace_stop_source`,
 - the first terminal error/stopped state,
 - an optional error `std::variant`.
+
+The state is a direct member of the operation state. Child receivers store a
+pointer to it; they do not share-own it. This relies on the P2300 operation
+lifetime rule that the operation state remains alive until completion.
 
 All child operations are started. On the first error or stopped signal,
 `when_all` records that terminal state and requests stop through the shared stop

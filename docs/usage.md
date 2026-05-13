@@ -122,10 +122,16 @@ The query model is member-based:
 auto env = bexec::get_env(receiver);
 auto token = bexec::query(env, bexec::get_stop_token);
 auto same_token = bexec::get_stop_token(env);
+auto allocator = bexec::query(env, bexec::get_allocator);
 ```
 
 Receivers can expose `get_env()`. If they do not, `get_env(receiver)` returns
 `empty_env`, whose stop token never requests stop.
+
+`get_allocator` is also a query tag. If the environment does not provide an
+allocator, it falls back to `std::allocator<std::byte>`. Code that adds
+allocator-aware heap storage should obtain its allocator through this query
+path.
 
 ## repeat_until
 

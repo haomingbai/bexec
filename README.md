@@ -36,7 +36,7 @@ factories/adaptors, and focused tests.
 - Minimal `inplace_stop_source`, `inplace_stop_token`, and
   `inplace_stop_callback`.
 - Minimal environment/query support with `get_env`, `query`,
-  `get_stop_token`, and `get_scheduler` tags.
+  `get_stop_token`, `get_allocator`, and `get_scheduler` tags.
 - `repeat_until` for sequential repetition using a sender factory.
 - `when_all` for structured startup and first-terminal aggregation.
 - A small coroutine `task<T>` and scheduler awaitable.
@@ -48,8 +48,8 @@ factories/adaptors, and focused tests.
 - It does not depend on `stdexec`.
 - It does not aggregate successful `when_all` values. Successful children are
   currently value-discarding and final completion is `set_value()`.
-- It does not provide allocator customization, domains, bulk execution,
-  full async scopes, advanced scheduler properties, or ABI-stable boundaries.
+- It does not provide domains, bulk execution, full async scopes, advanced
+  scheduler properties, or ABI-stable boundaries.
 
 ## Build
 

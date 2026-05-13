@@ -92,6 +92,23 @@ New senders should:
 Prefer rvalue `connect` for move-only state and const lvalue `connect` only
 when the sender is safely copyable.
 
+Asynchronous senders may capture pointers into their operation state because
+the operation state is required to remain alive until completion. Do not move a
+receiver into detached `shared_ptr` storage merely to keep it alive for a
+callback. If a sender or adaptor really needs heap storage inside the operation
+state, allocate it through `query(get_env(receiver), get_allocator)` and allow
+the query object to fall back to `std::allocator<std::byte>`.
+
+Delete copy and move operations on operation states when callbacks, child
+receivers, or other stored objects keep pointers or references into the
+operation state.
+
+Use `include/bexec/detail/manual_lifetime.hpp` when an operation state needs
+optional storage for child operation states. Unlike `std::optional`,
+`detail::manual_lifetime<T>` can construct a non-movable operation directly
+from a factory result, which avoids reintroducing hidden move-construction
+requirements.
+
 ## Adding An Adaptor
 
 Adaptor senders should wrap an upstream sender and connect it to an internal
@@ -101,6 +118,9 @@ receiver. The internal receiver should:
 - forward `set_stopped`,
 - preserve or deliberately override `get_env`,
 - document any value transformation or value discarding.
+
+Adaptor operation states should construct child operation states directly and
+must not require child operations to be move-constructible.
 
 Pipeable adaptors should follow the small `then_closure` pattern rather than
 trying to implement the full P2300 adaptor-closure model.

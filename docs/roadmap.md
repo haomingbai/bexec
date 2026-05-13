@@ -38,7 +38,7 @@ P2300-inspired library.
 
 ## Allocators And ABI
 
-- Add allocator-aware operation-state storage only when required by users.
+- Use `get_allocator` for any future operation-state heap storage.
 - Keep the public ABI header-only until a stable boundary is justified.
 
 ## P2300 Compatibility

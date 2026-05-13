@@ -73,15 +73,6 @@ class just_sender {
 };
 
 /**
- * @brief Creates a sender that completes synchronously with
- * set_value(values...).
- */
-template <class... Values>
-[[nodiscard]] auto just(Values&&... values) {
-  return just_sender<std::decay_t<Values>...>{std::forward<Values>(values)...};
-}
-
-/**
  * @brief Sender produced by just_error(error).
  */
 template <class Error>
@@ -124,14 +115,6 @@ class just_error_sender {
 };
 
 /**
- * @brief Creates a sender that completes synchronously with set_error(error).
- */
-template <class Error>
-[[nodiscard]] auto just_error(Error&& error) {
-  return just_error_sender<std::decay_t<Error>>{std::forward<Error>(error)};
-}
-
-/**
  * @brief Sender produced by just_stopped().
  */
 class just_stopped_sender {
@@ -157,9 +140,36 @@ class just_stopped_sender {
 };
 
 /**
- * @brief Creates a sender that completes synchronously with set_stopped().
+ * @brief Function object that creates just senders.
  */
-[[nodiscard]] inline just_stopped_sender just_stopped() { return {}; }
+struct just_t {
+  template <class... Values>
+  [[nodiscard]] auto operator()(Values&&... values) const {
+    return just_sender<std::decay_t<Values>...>{
+        std::forward<Values>(values)...};
+  }
+};
+
+/**
+ * @brief Function object that creates just_error senders.
+ */
+struct just_error_t {
+  template <class Error>
+  [[nodiscard]] auto operator()(Error&& error) const {
+    return just_error_sender<std::decay_t<Error>>{std::forward<Error>(error)};
+  }
+};
+
+/**
+ * @brief Function object that creates just_stopped senders.
+ */
+struct just_stopped_t {
+  [[nodiscard]] just_stopped_sender operator()() const { return {}; }
+};
+
+inline constexpr just_t just{};
+inline constexpr just_error_t just_error{};
+inline constexpr just_stopped_t just_stopped{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_JUST_HPP_

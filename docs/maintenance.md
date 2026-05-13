@@ -125,6 +125,11 @@ must not require child operations to be move-constructible.
 Pipeable adaptors should follow the small `then_closure` pattern rather than
 trying to implement the full P2300 adaptor-closure model.
 
+Public callable factories and adaptors should be named function-object
+instances, not standalone free functions. Define a small `*_t` struct with
+`operator()` overloads and expose it as an `inline constexpr` object, following
+`just_t`, `then_t`, `repeat_until_t`, and `when_all_t`.
+
 ## Adding A Scheduler
 
 A scheduler type should provide:

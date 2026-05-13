@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Defines the sender facade and factory function that repeat freshly-created
+ * Defines the sender facade and callable object that repeat freshly-created
  * child senders until a predicate succeeds while discarding child values.
  */
 
@@ -68,13 +68,18 @@ class repeat_until_sender {
 };
 
 /**
- * @brief Repeats factory() until predicate() returns true.
+ * @brief Function object that creates repeat_until senders.
  */
-template <class Factory, class Predicate>
-[[nodiscard]] auto repeat_until(Factory&& factory, Predicate&& predicate) {
-  return repeat_until_sender<std::decay_t<Factory>, std::decay_t<Predicate>>{
-      std::forward<Factory>(factory), std::forward<Predicate>(predicate)};
-}
+struct repeat_until_t {
+  template <class Factory, class Predicate>
+  [[nodiscard]] auto operator()(Factory&& factory,
+                                Predicate&& predicate) const {
+    return repeat_until_sender<std::decay_t<Factory>, std::decay_t<Predicate>>{
+        std::forward<Factory>(factory), std::forward<Predicate>(predicate)};
+  }
+};
+
+inline constexpr repeat_until_t repeat_until{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_REPEAT_UNTIL_HPP_

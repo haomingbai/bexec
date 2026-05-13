@@ -128,13 +128,17 @@ class when_all_sender {
 };
 
 /**
- * @brief Starts all child senders and completes after all have finished.
+ * @brief Function object that creates when_all senders.
  */
-template <sender... Senders>
-[[nodiscard]] auto when_all(Senders&&... senders) {
-  return when_all_sender<detail::remove_cvref_t<Senders>...>{
-      std::forward<Senders>(senders)...};
-}
+struct when_all_t {
+  template <sender... Senders>
+  [[nodiscard]] auto operator()(Senders&&... senders) const {
+    return when_all_sender<detail::remove_cvref_t<Senders>...>{
+        std::forward<Senders>(senders)...};
+  }
+};
+
+inline constexpr when_all_t when_all{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_

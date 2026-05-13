@@ -105,21 +105,22 @@ class then_sender {
 };
 
 /**
- * @brief Creates a pipeable sender adaptor that transforms set_value.
+ * @brief Function object that creates or applies then adaptors.
  */
-template <class Fn>
-[[nodiscard]] auto then(Fn&& fn) {
-  return then_closure<std::decay_t<Fn>>{std::forward<Fn>(fn)};
-}
+struct then_t {
+  template <class Fn>
+  [[nodiscard]] auto operator()(Fn&& fn) const {
+    return then_closure<std::decay_t<Fn>>{std::forward<Fn>(fn)};
+  }
 
-/**
- * @brief Applies then directly to a sender.
- */
-template <sender Sender, class Fn>
-[[nodiscard]] auto then(Sender&& sender, Fn&& fn) {
-  return then_sender<detail::remove_cvref_t<Sender>, std::decay_t<Fn>>{
-      std::forward<Sender>(sender), std::forward<Fn>(fn)};
-}
+  template <sender Sender, class Fn>
+  [[nodiscard]] auto operator()(Sender&& sender, Fn&& fn) const {
+    return then_sender<detail::remove_cvref_t<Sender>, std::decay_t<Fn>>{
+        std::forward<Sender>(sender), std::forward<Fn>(fn)};
+  }
+};
+
+inline constexpr then_t then{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_THEN_HPP_

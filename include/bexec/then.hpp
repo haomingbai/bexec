@@ -73,21 +73,30 @@ class then_sender {
 
   template <class Receiver>
   auto connect(Receiver receiver) && {
-    auto wrapped = detail::then_receiver<Receiver, Fn>{std::move(receiver),
-                                                       std::move(fn_)};
-    auto operation = bexec::connect(std::move(sender_), std::move(wrapped));
-    return detail::pass_through_operation<decltype(operation)>{
-        std::move(operation)};
+    using wrapped_type = detail::then_receiver<Receiver, Fn>;
+    using operation_type = decltype(bexec::connect(
+        std::declval<Sender>(), std::declval<wrapped_type>()));
+
+    return detail::pass_through_operation<operation_type>{
+        std::in_place, [sender = std::move(sender_), fn = std::move(fn_),
+                        receiver = std::move(receiver)]() mutable {
+          auto wrapped = wrapped_type{std::move(receiver), std::move(fn)};
+          return bexec::connect(std::move(sender), std::move(wrapped));
+        }};
   }
 
   template <class Receiver>
     requires std::copy_constructible<Sender> && std::copy_constructible<Fn>
   auto connect(Receiver receiver) const& {
-    auto wrapped =
-        detail::then_receiver<Receiver, Fn>{std::move(receiver), fn_};
-    auto operation = bexec::connect(sender_, std::move(wrapped));
-    return detail::pass_through_operation<decltype(operation)>{
-        std::move(operation)};
+    using wrapped_type = detail::then_receiver<Receiver, Fn>;
+    using operation_type = decltype(bexec::connect(
+        std::declval<const Sender&>(), std::declval<wrapped_type>()));
+
+    return detail::pass_through_operation<operation_type>{
+        std::in_place, [this, receiver = std::move(receiver)]() mutable {
+          auto wrapped = wrapped_type{std::move(receiver), fn_};
+          return bexec::connect(sender_, std::move(wrapped));
+        }};
   }
 
  private:

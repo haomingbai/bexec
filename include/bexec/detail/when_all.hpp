@@ -18,11 +18,11 @@
 #define BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_
 
 #include <bexec/detail/config.hpp>
+#include <bexec/detail/manual_lifetime.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/receiver.hpp>
 #include <exception>
-#include <memory>
 #include <mutex>
 #include <optional>
 #include <tuple>
@@ -35,8 +35,7 @@ namespace bexec::detail {
 template <std::size_t Index, class State>
 class when_all_child_receiver {
  public:
-  explicit when_all_child_receiver(std::shared_ptr<State> state)
-      : state_(std::move(state)) {}
+  explicit when_all_child_receiver(State& state) : state_(&state) {}
 
   [[nodiscard]] auto get_env() const noexcept {
     return env_with_stop_token{state_->stop_source.get_token(),
@@ -56,7 +55,7 @@ class when_all_child_receiver {
   void set_stopped() noexcept { state_->child_stopped(); }
 
  private:
-  std::shared_ptr<State> state_;
+  State* state_;
 };
 
 template <class Receiver, class ErrorVariant>
@@ -171,7 +170,7 @@ template <class Receiver, class ErrorVariant, class SenderTuple,
           std::size_t... Indices>
 struct when_all_operation_tuple<Receiver, ErrorVariant, SenderTuple,
                                 std::index_sequence<Indices...>> {
-  using type = std::tuple<std::optional<when_all_child_operation_t<
+  using type = std::tuple<manual_lifetime<when_all_child_operation_t<
       Receiver, ErrorVariant, SenderTuple, Indices>>...>;
 };
 

@@ -39,6 +39,18 @@ void test_when_all() {
   }
 
   {
+    bool transformed = false;
+    auto state = std::make_shared<shared_state>();
+    auto sender = bexec::when_all(bexec::just(), bexec::just()) |
+                  bexec::then([&] { transformed = true; });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(transformed);
+    CHECK(state->signal == signal_kind::value);
+  }
+
+  {
     using sender_type =
         decltype(bexec::when_all(bexec::just(), bexec::just_error(7)));
     using variant_type = sender_type::error_variant;

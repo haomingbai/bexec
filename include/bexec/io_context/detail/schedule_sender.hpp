@@ -9,8 +9,8 @@
  *
  * @details
  * Posts receiver completion to an io_context, observes stop tokens before and
- * after enqueueing, and reports enqueue/allocation failures as stopped or
- * error completions.
+ * after enqueueing, and reports enqueue failures as stopped or error
+ * completions.
  */
 
 #pragma once
@@ -23,8 +23,6 @@
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
 #include <exception>
-#include <memory>
-#include <optional>
 #include <utility>
 
 namespace bexec {
@@ -46,53 +44,49 @@ class schedule_sender {
     operation(io_context& context, Receiver receiver)
         : context_(&context), receiver_(std::move(receiver)) {}
 
+    operation(const operation&) = delete;
+    operation& operator=(const operation&) = delete;
+    operation(operation&&) = delete;
+    operation& operator=(operation&&) = delete;
+
     void start() noexcept {
       auto token =
-          bexec::query(bexec::get_env(*receiver_), bexec::get_stop_token);
+          bexec::query(bexec::get_env(receiver_), bexec::get_stop_token);
       if (token.stop_requested()) {
-        bexec::set_stopped(std::move(*receiver_));
-        receiver_.reset();
+        bexec::set_stopped(std::move(receiver_));
         return;
       }
 
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      std::shared_ptr<Receiver> receiver;
       try {
-        receiver = std::make_shared<Receiver>(std::move(*receiver_));
-        receiver_.reset();
-#else
-      auto receiver = std::make_shared<Receiver>(std::move(*receiver_));
-      receiver_.reset();
 #endif
-
-        const bool queued = context_->post([receiver]() mutable {
-          auto inner_token =
-              bexec::query(bexec::get_env(*receiver), bexec::get_stop_token);
-          if (inner_token.stop_requested()) {
-            bexec::set_stopped(std::move(*receiver));
-          } else {
-            bexec::set_value(std::move(*receiver));
-          }
-        });
+        operation* self = this;
+        const bool queued =
+            context_->post([self]() noexcept { self->complete(); });
 
         if (!queued) {
-          bexec::set_stopped(std::move(*receiver));
+          bexec::set_stopped(std::move(receiver_));
         }
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       } catch (...) {
-        if (receiver) {
-          bexec::set_error(std::move(*receiver), std::current_exception());
-        } else {
-          bexec::set_error(std::move(*receiver_), std::current_exception());
-          receiver_.reset();
-        }
+        bexec::set_error(std::move(receiver_), std::current_exception());
       }
 #endif
     }
 
    private:
+    void complete() noexcept {
+      auto token =
+          bexec::query(bexec::get_env(receiver_), bexec::get_stop_token);
+      if (token.stop_requested()) {
+        bexec::set_stopped(std::move(receiver_));
+      } else {
+        bexec::set_value(std::move(receiver_));
+      }
+    }
+
     io_context* context_;
-    std::optional<Receiver> receiver_;
+    Receiver receiver_;
   };
 
   template <class Receiver>

@@ -28,6 +28,10 @@ class pass_through_operation {
   explicit pass_through_operation(Operation operation)
       : operation_(std::move(operation)) {}
 
+  template <class Factory>
+  explicit pass_through_operation(std::in_place_t, Factory&& factory)
+      : operation_(std::forward<Factory>(factory)()) {}
+
   void start() noexcept { bexec::start(operation_); }
 
  private:

@@ -19,13 +19,13 @@
 #define BEXEC_INCLUDE_BEXEC_DETAIL_REPEAT_UNTIL_HPP_
 
 #include <bexec/detail/config.hpp>
+#include <bexec/detail/manual_lifetime.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
 #include <bexec/sender.hpp>
 #include <exception>
 #include <functional>
-#include <optional>
 #include <type_traits>
 #include <utility>
 
@@ -76,6 +76,11 @@ class repeat_until_operation {
       : factory_(std::move(factory)),
         predicate_(std::move(predicate)),
         receiver_(std::move(receiver)) {}
+
+  repeat_until_operation(const repeat_until_operation&) = delete;
+  repeat_until_operation& operator=(const repeat_until_operation&) = delete;
+  repeat_until_operation(repeat_until_operation&&) = delete;
+  repeat_until_operation& operator=(repeat_until_operation&&) = delete;
 
   Receiver& receiver() noexcept { return receiver_; }
 
@@ -144,9 +149,10 @@ class repeat_until_operation {
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       try {
 #endif
-        auto sender = factory_();
-        current_.emplace(
-            bexec::connect(std::move(sender), child_receiver_type{*this}));
+        current_.emplace_from([this] {
+          auto sender = factory_();
+          return bexec::connect(std::move(sender), child_receiver_type{*this});
+        });
         child_pending_ = true;
 
         /*
@@ -176,7 +182,7 @@ class repeat_until_operation {
   Factory factory_;
   Predicate predicate_;
   Receiver receiver_;
-  std::optional<child_operation_type> current_;
+  manual_lifetime<child_operation_type> current_;
   bool draining_{false};
   bool child_pending_{false};
   bool continue_requested_{false};

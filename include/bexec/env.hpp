@@ -9,7 +9,7 @@
  *
  * @details
  * Defines empty_env and env_with_stop_token so receivers and algorithms can
- * answer get_stop_token while delegating other queries.
+ * answer get_stop_token/get_allocator while delegating other queries.
  */
 
 #pragma once
@@ -26,11 +26,18 @@
 namespace bexec {
 
 /**
- * @brief Empty environment that provides a never_stop_token.
+ * @brief Empty environment that provides fallback stop token and allocator.
  */
 struct empty_env {
   /** @brief Returns a token that never requests stop. */
   [[nodiscard]] never_stop_token query(get_stop_token_t) const noexcept {
+    return {};
+  }
+
+  /** @brief Returns the default allocator used by allocator-aware operations.
+   */
+  [[nodiscard]] std::allocator<std::byte> query(
+      get_allocator_t) const noexcept {
     return {};
   }
 };

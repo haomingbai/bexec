@@ -17,6 +17,7 @@ add_executable(
     test_concepts.cpp
     test_env.cpp
     test_just.cpp
+    test_let.cpp
     test_repeat_until.cpp
     test_scheduler.cpp
     test_stop_token.cpp

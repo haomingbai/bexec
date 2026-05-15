@@ -9,8 +9,8 @@
  *
  * @details
  * Provides cvref removal, variant membership checks, signature gathering
- * helpers, then completion transformations, and shared type-list helpers for
- * algorithms.
+ * helpers, then/let completion transformations, and shared type-list helpers
+ * for algorithms.
  */
 
 #pragma once
@@ -107,6 +107,49 @@ struct then_completion_signatures<Fn, completion_signatures<Signatures...>> {
 template <class Fn, class Sender>
 using then_completion_signatures_t = typename then_completion_signatures<
     Fn, sender_completion_signatures_t<Sender>>::type;
+
+template <class Tag, class Fn, class Signature>
+struct let_signature {
+  using type = type_list<Signature>;
+};
+
+template <class Fn, class... Args>
+struct let_signature<set_value_t, Fn, set_value_t(Args...)> {
+  using sender_type = std::invoke_result_t<Fn&, Args...>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type>>;
+};
+
+template <class Fn, class Error>
+struct let_signature<set_error_t, Fn, set_error_t(Error)> {
+  using sender_type = std::invoke_result_t<Fn&, Error>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type>>;
+};
+
+template <class Fn>
+struct let_signature<set_stopped_t, Fn, set_stopped_t()> {
+  using sender_type = std::invoke_result_t<Fn&>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type>>;
+};
+
+template <class Tag, class Fn, class Completions>
+struct let_completion_signatures;
+
+template <class Tag, class Fn, class... Signatures>
+struct let_completion_signatures<Tag, Fn,
+                                 completion_signatures<Signatures...>> {
+  using transformed =
+      concat_type_lists_t<typename let_signature<Tag, Fn, Signatures>::type...>;
+  using with_exception = unique_type_list_t<concat_type_lists_t<
+      transformed, type_list<set_error_t(std::exception_ptr)>>>;
+  using type = completion_signatures_from_type_list_t<with_exception>;
+};
+
+template <class Tag, class Fn, class Sender>
+using let_completion_signatures_t = typename let_completion_signatures<
+    Tag, Fn, sender_completion_signatures_t<Sender>>::type;
 
 template <class Sender>
 using sender_errors_with_exception_t =

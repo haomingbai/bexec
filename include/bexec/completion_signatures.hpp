@@ -173,6 +173,19 @@ template <class List>
 using completion_signatures_from_type_list_t =
     typename completion_signatures_from_type_list<List>::type;
 
+template <class Completions>
+struct completion_signatures_to_type_list;
+
+template <class... Signatures>
+struct completion_signatures_to_type_list<
+    completion_signatures<Signatures...>> {
+  using type = type_list<Signatures...>;
+};
+
+template <class Completions>
+using completion_signatures_to_type_list_t =
+    typename completion_signatures_to_type_list<Completions>::type;
+
 template <class Signature, class Tag, template <class...> class Tuple>
 struct gather_one_signature {
   using type = type_list<>;

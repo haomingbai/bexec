@@ -111,6 +111,7 @@ void test_concepts();
 void test_completion_signatures();
 void test_env();
 void test_just();
+void test_let();
 void test_repeat_until();
 void test_scheduler();
 void test_stop_token();

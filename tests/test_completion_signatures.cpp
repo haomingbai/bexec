@@ -15,6 +15,7 @@
 #include <bexec/completion_signatures.hpp>
 #include <bexec/env.hpp>
 #include <bexec/just.hpp>
+#include <bexec/let.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
@@ -95,6 +96,29 @@ void test_completion_signatures() {
                              std::variant<std::tuple<int>>>);
   static_assert(std::same_as<bexec::error_types_of_t<then_int>,
                              std::variant<std::exception_ptr>>);
+
+  using let_value_string = decltype(bexec::just(1) | bexec::let_value([](int) {
+                                      return bexec::just(std::string{});
+                                    }));
+  static_assert(std::same_as<bexec::value_types_of_t<let_value_string>,
+                             std::variant<std::tuple<std::string>>>);
+  static_assert(std::same_as<bexec::error_types_of_t<let_value_string>,
+                             std::variant<std::exception_ptr>>);
+
+  using let_error_int =
+      decltype(bexec::just_error(std::string{}) |
+               bexec::let_error([](std::string) { return bexec::just(1); }));
+  static_assert(std::same_as<bexec::value_types_of_t<let_error_int>,
+                             std::variant<std::tuple<int>>>);
+  static_assert(std::same_as<bexec::error_types_of_t<let_error_int>,
+                             std::variant<std::exception_ptr>>);
+
+  using let_stopped_int =
+      decltype(bexec::just_stopped() |
+               bexec::let_stopped([] { return bexec::just(1); }));
+  static_assert(std::same_as<bexec::value_types_of_t<let_stopped_int>,
+                             std::variant<std::tuple<int>>>);
+  static_assert(!bexec::sends_stopped<let_stopped_int>);
 
   using all = decltype(bexec::when_all(bexec::just(), bexec::just_error(7)));
   static_assert(

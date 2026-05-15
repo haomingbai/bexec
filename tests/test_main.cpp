@@ -25,6 +25,7 @@ int main() {
   bexec_tests::test_completion_signatures();
   bexec_tests::test_just();
   bexec_tests::test_then();
+  bexec_tests::test_let();
   bexec_tests::test_stop_token();
   bexec_tests::test_env();
   bexec_tests::test_scheduler();

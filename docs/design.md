@@ -61,9 +61,12 @@ using completions = bexec::completion_signatures<
 The public helpers `completion_signatures_of_t`, `value_types_of_t`,
 `error_types_of_t`, and `sends_stopped` inspect this signature pack. `then`
 transforms `set_value_t(Args...)` alternatives for simple invocable cases and
-adds `std::exception_ptr` to possible errors. `when_all` declares the actual
-error it sends: a `std::variant` containing child error alternatives plus
-`std::exception_ptr`.
+adds `std::exception_ptr` to possible errors. `let_value`, `let_error`, and
+`let_stopped` replace the selected upstream completion signatures with the
+completion signatures of the sender returned by the user callable, preserve
+non-selected completions, and add `std::exception_ptr` for callable/connect
+exceptions. `when_all` declares the actual error it sends: a `std::variant`
+containing child error alternatives plus `std::exception_ptr`.
 
 ## Ownership Model
 
@@ -149,6 +152,43 @@ context. If the receiver's stop token is already requested, it completes with
 before delivering `set_value()`. The posted handler captures a pointer to the
 operation state; the receiver remains stored in that operation state until
 completion.
+
+## let_* Operation State
+
+`let_value(sender, fn)`, `let_error(sender, fn)`, and
+`let_stopped(sender, fn)` are continuation adaptors. They replace only one
+upstream completion kind:
+
+- `let_value` calls `fn(args...)` when the upstream sends `set_value(args...)`.
+- `let_error` calls `fn(error)` when the upstream sends `set_error(error)`.
+- `let_stopped` calls `fn()` when the upstream sends `set_stopped()`.
+
+The callable must return a sender. That child sender is connected to an
+internal child receiver and started immediately. The final downstream receiver
+gets the child sender's terminal signal. Non-selected upstream completions are
+forwarded directly to the downstream receiver without invoking the callable.
+
+The operation state stores:
+
+- the user callable,
+- the downstream receiver,
+- the upstream operation in `manual_lifetime`,
+- storage for one selected child operation.
+
+The child operation storage is a small in-place type switch over the operation
+types implied by the selected upstream completion signatures. It does not use
+heap allocation, `std::function`, or `std::optional`, and it does not require
+child operation states to be movable.
+
+Receivers used by the upstream and child operations store only a pointer back
+to the parent operation state. For that reason, the `let_*` operation state
+deletes copy and move operations. This follows the library-wide operation
+lifetime rule: the operation state must remain alive until the terminal signal
+is delivered.
+
+When exceptions are enabled, exceptions thrown while invoking the callable or
+connecting the child sender are delivered as `set_error(std::exception_ptr)`.
+With exceptions disabled, throwing callables are not supported.
 
 ## repeat_until State Machine
 

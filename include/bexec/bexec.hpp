@@ -23,6 +23,7 @@
 #include <bexec/env.hpp>
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
+#include <bexec/let.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>

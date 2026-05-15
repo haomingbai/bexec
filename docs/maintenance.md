@@ -17,7 +17,7 @@
 - `tests/test_main.cpp`: CTest executable entry point.
 - `tests/test_support.hpp`: shared test receiver and assertion helpers.
 - `tests/test_*.cpp`: one feature module per test file.
-- `examples/basic.cpp`: compiled examples covering the main features.
+- `examples/`: one compiled example case per feature area.
 - `docs/`: usage, design, maintenance, and roadmap documentation.
 - `PROGRESS.md`: checkpoint log with commands run and known limitations.
 

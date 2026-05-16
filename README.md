@@ -39,7 +39,7 @@ factories/adaptors, and focused tests.
   `get_stop_token`, `get_allocator`, and `get_scheduler` tags.
 - `repeat_until` for sequential repetition using a sender factory.
 - `when_all` for structured startup and first-terminal aggregation.
-- A small coroutine `task<T>` and scheduler awaitable.
+- A small coroutine `task<T>` helper.
 
 ## What It Is Not
 

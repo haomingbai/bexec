@@ -241,9 +241,10 @@ Current MVP simplification: successful child values are discarded.
 ## Coroutine Design
 
 `task<T>` is a lazy coroutine task. It starts when `start()` is called and
-stores either a result or an exception. `scheduler.schedule_awaitable()` resumes
-the coroutine on the associated `io_context`.
+stores either a result or an exception.
 
-The coroutine support is intentionally scoped to demonstrating scheduler
-integration. `task<T>` is not a sender and does not provide a general-purpose
-async runtime.
+The coroutine support is intentionally scoped to a minimal task helper.
+Schedulers expose scheduling through `schedule(scheduler)`, not through
+awaiter member functions. Future sender-to-awaitable support should be built
+with an internal receiver that connects to a sender and resumes the coroutine
+from receiver completion signals.

@@ -1,6 +1,6 @@
 /**
  * @file examples/coroutine_task.cpp
- * @brief Demonstrates task<T> with scheduler awaitables.
+ * @brief Demonstrates the lazy task<T> coroutine helper.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-15
  *
@@ -13,19 +13,16 @@
 
 namespace {
 
-bexec::task<int> compute_on(bexec::io_context::scheduler scheduler) {
-  co_await scheduler.schedule_awaitable();
+bexec::task<int> compute_value() {
   co_return 42;
 }
 
 }  // namespace
 
 int main() {
-  bexec::io_context context;
-  auto task = compute_on(context.get_scheduler());
+  auto task = compute_value();
 
   task.start();
-  context.run();
 
   std::cout << "coroutine result: " << task.result() << '\n';
 }

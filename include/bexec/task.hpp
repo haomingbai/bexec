@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Defines task<T> and task<void> for examples and scheduler awaitable tests,
- * including stored result and exception handling.
+ * Defines task<T> and task<void> for examples and tests, including stored
+ * result and exception handling.
  */
 
 #pragma once
@@ -26,7 +26,7 @@
 namespace bexec {
 
 /**
- * @brief Coroutine task type used by bexec scheduler examples and tests.
+ * @brief Coroutine task type used by bexec examples and tests.
  *
  * The task is lazy: call start() to run until the first suspension. result()
  * consumes the stored result after done() is true.

@@ -8,9 +8,8 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Defines the mutex-protected run loop, posting APIs, scheduler handle,
- * schedule sender integration, and coroutine awaitable used by examples and
- * tests.
+ * Defines the mutex-protected run loop, posting APIs, scheduler handle, and
+ * schedule sender integration used by examples and tests.
  */
 
 #pragma once
@@ -20,7 +19,6 @@
 
 #include <bexec/scheduler.hpp>
 #include <condition_variable>
-#include <coroutine>
 #include <cstddef>
 #include <deque>
 #include <functional>
@@ -131,30 +129,6 @@ class io_context::scheduler {
   /** @brief Enqueues arbitrary work on the associated io_context. */
   bool post(std::function<void()> work) const {
     return context_->post(std::move(work));
-  }
-
-  /** @brief Awaiter that resumes a coroutine on the associated io_context. */
-  class schedule_awaiter {
-   public:
-    explicit schedule_awaiter(scheduler sched) : context_(sched.context_) {}
-
-    bool await_ready() const noexcept { return false; }
-
-    void await_suspend(std::coroutine_handle<> handle) const {
-      if (!context_->post([handle]() mutable { handle.resume(); })) {
-        handle.resume();
-      }
-    }
-
-    void await_resume() const noexcept {}
-
-   private:
-    io_context* context_;
-  };
-
-  /** @brief Returns an awaitable that resumes on this scheduler. */
-  [[nodiscard]] schedule_awaiter schedule_awaitable() const {
-    return schedule_awaiter{*this};
   }
 
   friend bool operator==(scheduler lhs, scheduler rhs) noexcept {

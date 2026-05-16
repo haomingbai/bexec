@@ -184,24 +184,21 @@ are delivered as a `std::variant` of the child error types plus
 
 ## Coroutines
 
-`task<T>` is a small lazy coroutine task used with the internal scheduler.
+`task<T>` is a small lazy coroutine task helper.
 
 ```cpp
-#include <bexec/io_context/io_context.hpp>
+#include <bexec/task.hpp>
 
-bexec::task<int> run_on_scheduler(bexec::io_context::scheduler sched) {
-    co_await sched.schedule_awaitable();
+bexec::task<int> compute_value() {
     co_return 42;
 }
 
-bexec::io_context context;
-auto task = run_on_scheduler(context.get_scheduler());
+auto task = compute_value();
 
 task.start();
-context.run();
 int value = task.result();
 ```
 
 `task<T>` is intentionally small. It is not a sender, not a general coroutine
-framework, and does not provide cancellation propagation beyond what the awaited
-scheduler operation supports.
+framework, and does not make scheduler senders directly awaitable. Future
+receiver-based coroutine integration is tracked in the roadmap.

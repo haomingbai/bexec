@@ -22,10 +22,54 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bexec_examples {
+
+inline void print_value(int value) { std::cout << value; }
+
+inline void print_value(const std::string& value) {
+  std::cout << '"' << value << '"';
+}
+
+inline void print_value(const std::unique_ptr<int>& value) {
+  std::cout << "unique_ptr<int>{";
+  if (value) {
+    std::cout << *value;
+  } else {
+    std::cout << "null";
+  }
+  std::cout << '}';
+}
+
+template <class... Args>
+void print_value(const std::tuple<Args...>& value) {
+  std::cout << "tuple{";
+  bool first = true;
+  std::apply(
+      [&](const auto&... args) {
+        ((std::cout << (first ? "" : ", "), print_value(args), first = false),
+         ...);
+      },
+      value);
+  std::cout << '}';
+}
+
+template <class... Alternatives>
+void print_value(const std::variant<Alternatives...>& value) {
+  std::cout << "variant{";
+  std::visit([](const auto& alternative) { print_value(alternative); }, value);
+  std::cout << '}';
+}
+
+template <class... Args>
+void print_values(const Args&... args) {
+  bool first = true;
+  ((std::cout << (first ? "" : ", "), print_value(args), first = false), ...);
+}
 
 class logging_receiver {
  public:
@@ -45,11 +89,27 @@ class logging_receiver {
     std::cout << label_ << ": set_value(unique_ptr<int>{" << *value << "})\n";
   }
 
+  template <class... Alternatives>
+  void set_value(std::variant<Alternatives...> value) noexcept {
+    std::cout << label_ << ": set_value(";
+    print_value(value);
+    std::cout << ")\n";
+  }
+
+  template <class First, class Second, class... Rest>
+  void set_value(First&& first, Second&& second, Rest&&... rest) noexcept {
+    std::cout << label_ << ": set_value(";
+    print_values(first, second, rest...);
+    std::cout << ")\n";
+  }
+
   template <class Error>
   void set_error(Error&& error) noexcept {
     std::cout << label_ << ": set_error";
     if constexpr (std::same_as<std::decay_t<Error>, std::string>) {
       std::cout << "(\"" << error << "\")";
+    } else if constexpr (std::same_as<std::decay_t<Error>, int>) {
+      std::cout << '(' << error << ')';
     } else if constexpr (std::same_as<std::decay_t<Error>,
                                       std::exception_ptr>) {
       std::cout << "(std::exception_ptr)";

@@ -12,12 +12,18 @@
 
 set(
     BEXEC_EXAMPLES
+    completion_adaptors
     coroutine_task
     environment
+    into_variant
     just_then
     let
     repeat_until
+    run_loop
     scheduler
+    scheduling_adaptors
+    split_with_let
+    sync_wait
     when_all
 )
 

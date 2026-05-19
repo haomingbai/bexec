@@ -55,12 +55,21 @@ auto stopped_op = bexec::connect(bexec::just_stopped(), receiver{});
 
 ## then
 
-`then(fn)` transforms `set_value`. It can be used directly or as a pipeable
-adaptor.
+`then(fn)` transforms `set_value`. `upon_error(fn)` transforms `set_error`.
+`upon_stopped(fn)` transforms `set_stopped`. They can be used directly or as
+pipeable adaptors.
 
 ```cpp
 auto s = bexec::just(1) | bexec::then([](int x) {
     return x + 1;
+});
+
+auto recovered = bexec::just_error(5) | bexec::upon_error([](int code) {
+    return code + 1;
+});
+
+auto stopped = bexec::just_stopped() | bexec::upon_stopped([] {
+    return 42;
 });
 ```
 
@@ -70,6 +79,8 @@ values. If `fn` returns a value, the downstream receiver gets that value.
 When exceptions are enabled, exceptions thrown by `fn` are delivered as
 `set_error(std::exception_ptr)`. With exceptions disabled, throwing callables
 are not supported.
+
+Non-selected completions are forwarded unchanged.
 
 ## Scheduler
 
@@ -94,6 +105,37 @@ context.run();
 
 `post` and `enqueue` are thread-safe. `run()` drains queued work until the queue
 is empty or `stop()` is requested. It is not a work-guarded blocking loop.
+
+`run_loop` is a stack-owned FIFO scheduler whose queue stores operation
+pointers intrusively. It is useful for local tests, hand-written blocking
+waits, and `this_thread::sync_wait`.
+
+```cpp
+bexec::run_loop loop;
+
+auto op = bexec::connect(
+    bexec::starts_on(loop.get_scheduler(), bexec::just(7)),
+    receiver{});
+
+bexec::start(op);
+loop.run_one();
+```
+
+`starts_on(scheduler, sender)` first completes `schedule(scheduler)` and then
+starts the child sender on that execution resource.
+
+`on(scheduler, sender)` starts the child through the target scheduler and
+schedules final delivery back through `get_scheduler(get_env(receiver))`.
+Connecting an `on` sender is ill-formed when the receiver environment has no
+`get_scheduler` query.
+
+```cpp
+bexec::run_loop target;
+bexec::run_loop caller;
+
+// The receiver environment must answer get_scheduler with caller's scheduler.
+auto s = bexec::on(target.get_scheduler(), bexec::just(1));
+```
 
 ## Stop Tokens
 
@@ -132,6 +174,10 @@ Receivers can expose `get_env()`. If they do not, `get_env(receiver)` returns
 allocator, it falls back to `std::allocator<std::byte>`. Code that adds
 allocator-aware heap storage should obtain its allocator through this query
 path.
+
+`get_scheduler` and `get_delegation_scheduler` are also query tags. `on` uses
+`get_scheduler` from the downstream receiver environment to restore final
+delivery.
 
 ## repeat_until
 
@@ -176,11 +222,54 @@ bexec::start(op);
 context.run();
 ```
 
-All-success completion sends `set_value()` with no values. On the first error
-or stopped signal, `when_all` requests stop through its internal stop source and
-waits for all started children to finish before completing the receiver. Errors
-are delivered as a `std::variant` of the child error types plus
-`std::exception_ptr`.
+All-success completion sends the concatenated child values in argument order:
+
+```cpp
+auto result = bexec::this_thread::sync_wait(
+    bexec::when_all(bexec::just(1, 2), bexec::just(std::string{"ok"})));
+
+// result has type std::optional<std::tuple<int, int, std::string>>
+```
+
+On the first error or stopped signal, `when_all` requests stop through its
+internal stop source and waits for all started children to finish before
+completing the receiver. Errors are delivered as their original error type;
+`std::exception_ptr` is also listed for internal connect/start failures.
+
+Plain `when_all` requires each child sender to have at most one value
+completion alternative. Use `when_all_with_variant` for senders with multiple
+value alternatives:
+
+```cpp
+auto s = bexec::when_all_with_variant(maybe_int_or_string(), bexec::just(3));
+```
+
+`when_all()` and `when_all_with_variant()` with zero senders are ill-formed.
+
+## into_variant
+
+`into_variant(sender)` maps every successful value completion into one
+`std::variant<std::tuple<...>, ...>` value. Duplicate tuple alternatives are
+removed from the variant type. Errors and stopped completion are forwarded.
+
+```cpp
+auto s = bexec::into_variant(maybe_int_or_string());
+```
+
+## sync_wait
+
+`bexec::this_thread::sync_wait(sender)` starts a sender and blocks the current
+thread by running a local `run_loop`. A value completion returns
+`std::optional<std::tuple<...>>`; stopped returns `std::nullopt`; errors are
+thrown, with `std::exception_ptr` rethrown.
+
+```cpp
+auto value = bexec::this_thread::sync_wait(bexec::just(1));
+```
+
+`sync_wait_with_variant(sender)` is the variant-returning form for senders with
+multiple value alternatives. It returns
+`std::optional<std::variant<std::tuple<...>, ...>>`.
 
 ## Coroutines
 

@@ -10,12 +10,6 @@ P2300-inspired library.
 - Improve compile-time diagnostics when adaptor callables are not invocable for
   all `set_value_t(Args...)` alternatives.
 
-## when_all Values
-
-- Aggregate successful child values.
-- Preserve tuple structure for zero, one, and many values per child.
-- Define a stable public result shape before exposing it broadly.
-
 ## Cancellation
 
 - Expand stop-token integration across all algorithms.
@@ -28,7 +22,8 @@ P2300-inspired library.
 - Add a blocking `run_forever()` or work-guard model if real applications need
   a long-running event loop.
 - Add timer support.
-- Add scheduler environment queries beyond `get_stop_token`.
+- Add scheduler environment queries and properties beyond the current
+  `get_scheduler` / `get_delegation_scheduler` subset.
 
 ## Coroutines
 
@@ -46,5 +41,7 @@ P2300-inspired library.
 ## P2300 Compatibility
 
 - Track naming and semantic differences against the standard wording.
+- Add unimplemented standard algorithms such as `bulk`, `split`,
+  `stopped_as_optional`, and public `schedule_from` when they are needed.
 - Add migration notes once mainstream C++26 execution implementations become
   available.

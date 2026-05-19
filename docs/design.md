@@ -59,14 +59,20 @@ using completions = bexec::completion_signatures<
 ```
 
 The public helpers `completion_signatures_of_t`, `value_types_of_t`,
-`error_types_of_t`, and `sends_stopped` inspect this signature pack. `then`
-transforms `set_value_t(Args...)` alternatives for simple invocable cases and
-adds `std::exception_ptr` to possible errors. `let_value`, `let_error`, and
-`let_stopped` replace the selected upstream completion signatures with the
-completion signatures of the sender returned by the user callable, preserve
-non-selected completions, and add `std::exception_ptr` for callable/connect
-exceptions. `when_all` declares the actual error it sends: a `std::variant`
-containing child error alternatives plus `std::exception_ptr`.
+`error_types_of_t`, and `sends_stopped` inspect this signature pack. `then`,
+`upon_error`, and `upon_stopped` transform the selected completion kind into a
+value completion and add `std::exception_ptr` to possible errors. `let_value`,
+`let_error`, and `let_stopped` replace the selected upstream completion
+signatures with the completion signatures of the sender returned by the user
+callable, preserve non-selected completions, and add `std::exception_ptr` for
+callable/connect exceptions.
+
+`into_variant` maps value signatures to one
+`set_value_t(std::variant<std::tuple<...>, ...>)` signature, with duplicate
+tuple alternatives removed. Plain `when_all` requires each child sender to have
+at most one value completion and declares concatenated successful values plus
+raw child error alternatives. `when_all_with_variant` applies `into_variant` to
+each child before `when_all`.
 
 ## Ownership Model
 
@@ -103,6 +109,8 @@ The returned environment answers queries through member functions:
 ```cpp
 auto query(bexec::get_stop_token_t) const noexcept;
 auto query(bexec::get_allocator_t) const noexcept;
+auto query(bexec::get_scheduler_t) const noexcept;
+auto query(bexec::get_delegation_scheduler_t) const noexcept;
 ```
 
 If a receiver has no `get_env()`, `empty_env` is used. `empty_env` answers
@@ -113,10 +121,17 @@ If a receiver has no `get_env()`, `empty_env` is used. `empty_env` answers
 queries to the wrapped environment. `when_all` uses this to give children a
 shared cancellation token.
 
+`env_with_scheduler<Scheduler, BaseEnv>` overrides `get_scheduler` and
+`get_delegation_scheduler` while delegating other queries. Scheduling adaptors
+use scheduler-aware environments so child operations can observe the execution
+resource they are running on.
+
 ## Stop Token Model
 
 `inplace_stop_source`, `inplace_stop_token`, and `inplace_stop_callback` provide
-a small callback-based stop mechanism.
+a small callback-based stop mechanism. Callback records are stored intrusively
+inside `inplace_stop_callback`; registration does not allocate and the source
+owns only a linked list head plus synchronization state.
 
 Threading guarantees:
 
@@ -130,6 +145,19 @@ Threading guarantees:
 
 Callbacks are expected not to throw. If a callback throws, the implementation
 terminates.
+
+## run_loop Model
+
+`run_loop` is a stack-owned FIFO scheduler intended for local execution,
+`sync_wait`, and tests. Scheduled operations derive from a small intrusive
+operation node. Starting a schedule operation links that operation into the
+loop queue; no `std::function` or heap allocation is needed for the scheduling
+path.
+
+`run()` blocks until `finish()` is requested and queued work has drained.
+`run_one()` executes one queued item if available. `sync_wait` uses a local
+`run_loop` and a receiver environment that answers both `get_scheduler` and
+`get_delegation_scheduler` with that loop's scheduler.
 
 ## io_context Model
 
@@ -152,6 +180,28 @@ context. If the receiver's stop token is already requested, it completes with
 before delivering `set_value()`. The posted handler captures a pointer to the
 operation state; the receiver remains stored in that operation state until
 completion.
+
+`io_context::post(std::function<void()>)` is a demonstration API and may
+allocate. The newer operation-state algorithms avoid adding heap ownership of
+their own.
+
+## Scheduling Adaptors And sync_wait
+
+`starts_on(scheduler, sender)` first starts `schedule(scheduler)`. When that
+scheduling sender completes successfully, it connects and starts the child
+sender. Schedule errors and stopped signals are forwarded to the downstream
+receiver.
+
+`on(scheduler, sender)` starts the child through `starts_on`, stores the child
+completion in-place, then schedules final delivery through
+`get_scheduler(get_env(receiver))`. Connecting an `on` sender is ill-formed
+when that scheduler query is unavailable.
+
+`bexec::this_thread::sync_wait(sender)` connects the sender to a receiver backed
+by a local `run_loop`. Value completion returns
+`std::optional<std::tuple<...>>`, stopped returns `std::nullopt`, and errors are
+thrown. `sync_wait_with_variant` applies `into_variant` and returns
+`std::optional<std::variant<std::tuple<...>, ...>>`.
 
 ## let_* Operation State
 
@@ -221,7 +271,8 @@ Cancellation is checked through the receiver environment before each iteration.
 - a mutex,
 - an internal `inplace_stop_source`,
 - the first terminal error/stopped state,
-- an optional error `std::variant`.
+- an optional error `std::variant`,
+- in-place optional storage for each child value tuple.
 
 The state is a direct member of the operation state. Child receivers store a
 pointer to it; they do not share-own it. This relies on the P2300 operation
@@ -232,11 +283,14 @@ All child operations are started. On the first error or stopped signal,
 source. Children receive that token through their environment.
 
 The final receiver is completed only after all started children have finished.
-If the first terminal state was an error, the receiver gets
-`set_error(error_variant)`. If it was stopped, the receiver gets
-`set_stopped()`. If all children succeed, the receiver gets `set_value()`.
+If the first terminal state was an error, the receiver gets the stored error as
+its original error type. If it was stopped, the receiver gets `set_stopped()`.
+If all children succeed, the stored value tuples are concatenated and delivered
+as `set_value(args...)` in child order.
 
-Current MVP simplification: successful child values are discarded.
+The internal error storage remains a `std::variant` so the operation can keep
+the first error until all children finish. That variant is not the public error
+completion shape.
 
 ## Coroutine Design
 

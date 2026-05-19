@@ -4,9 +4,9 @@ bexec is a small C++20 sender/receiver concurrency library inspired by P2300.
 It is intended as a temporary, practical bridge while standardized C++26
 execution support becomes widely available in mainstream stable toolchains.
 
-This is not a full P2300 implementation. The current code is an MVP with a
-member-customization API, P2300-style completion signatures, a small run-loop
-scheduler, basic stop tokens, simple environment queries, a few sender
+This is not a full P2300 implementation. The current code is a C++26-aligned
+subset with a member-customization API, P2300-style completion signatures,
+small schedulers, in-place stop tokens, simple environment queries, sender
 factories/adaptors, and focused tests.
 
 ## What It Is
@@ -29,16 +29,30 @@ factories/adaptors, and focused tests.
   - `just_error`
   - `just_stopped`
   - `then`
+  - `upon_error`
+  - `upon_stopped`
+  - `let_value`
+  - `let_error`
+  - `let_stopped`
+  - `into_variant`
   - pipe syntax: `sender | then(fn)`
 - A simple `io_context` scheduler. Despite the name, it does not implement
   file, socket, or OS IO; it is a FIFO execution context using the familiar
   run-loop pattern.
+- A stack-owned `run_loop` scheduler for `this_thread::sync_wait`, tests, and
+  small local scheduling scenarios.
 - Minimal `inplace_stop_source`, `inplace_stop_token`, and
   `inplace_stop_callback`.
 - Minimal environment/query support with `get_env`, `query`,
-  `get_stop_token`, `get_allocator`, and `get_scheduler` tags.
+  `get_stop_token`, `get_allocator`, `get_scheduler`, and
+  `get_delegation_scheduler` tags.
 - `repeat_until` for sequential repetition using a sender factory.
-- `when_all` for structured startup and first-terminal aggregation.
+- `when_all` for structured startup, value aggregation, raw error delivery,
+  and first-terminal stop propagation.
+- `when_all_with_variant` for child senders with multiple value alternatives.
+- `starts_on(scheduler, sender)` and `on(scheduler, sender)`.
+- `bexec::this_thread::sync_wait(sender)` and
+  `bexec::this_thread::sync_wait_with_variant(sender)`.
 - A small coroutine `task<T>` helper.
 
 ## What It Is Not
@@ -46,10 +60,10 @@ factories/adaptors, and focused tests.
 - It is not a complete implementation of P2300.
 - It does not use `tag_invoke`.
 - It does not depend on `stdexec`.
-- It does not aggregate successful `when_all` values. Successful children are
-  currently value-discarding and final completion is `set_value()`.
 - It does not provide domains, bulk execution, full async scopes, advanced
   scheduler properties, or ABI-stable boundaries.
+- It does not provide the nonstandard `bexec::sync_wait` alias or
+  `on(sender, scheduler)` overload.
 
 ## Build
 
@@ -95,6 +109,15 @@ bexec::start(op);
 ```
 
 ```cpp
+auto result = bexec::this_thread::sync_wait(
+    bexec::when_all(bexec::just(1), bexec::just(std::string{"ok"})));
+
+if (result) {
+    auto& [number, text] = *result;
+}
+```
+
+```cpp
 bexec::io_context context;
 auto sched = context.get_scheduler();
 
@@ -118,10 +141,15 @@ context.run();
   the same operation state across iterations is intentionally not supported.
 - `repeat_until` discards child values and completes with `set_value()` when
   the predicate returns true.
-- `when_all` discards child success values. It stores the first terminal error
-  in a `std::variant` of declared child error types plus
-  `std::exception_ptr`.
+- `when_all()` and `when_all_with_variant()` require at least one child sender.
+- Plain `when_all` requires each child to have at most one value completion
+  alternative. Use `when_all_with_variant` when a child has multiple possible
+  value shapes.
+- Demo-only `io_context::post(std::function<void()>)` may allocate. The
+  library operation states added for scheduling and waiting use in-place
+  operation storage.
 - If exceptions are disabled, `then` cannot translate thrown exceptions to
-  `std::exception_ptr`; throwing code is outside the supported configuration.
+  `std::exception_ptr`; the same limitation applies to other adaptors that
+  report callable/connect failures as `std::exception_ptr`.
 
 See `docs/usage.md`, `docs/design.md`, and `docs/maintenance.md` for details.

@@ -121,14 +121,12 @@ void test_completion_signatures() {
   static_assert(!bexec::sends_stopped<let_stopped_int>);
 
   using all = decltype(bexec::when_all(bexec::just(), bexec::just_error(7)));
-  static_assert(
-      std::same_as<bexec::completion_signatures_of_t<all>,
-                   bexec::completion_signatures<
-                       bexec::set_value_t(),
-                       bexec::set_error_t(typename all::error_variant),
-                       bexec::set_stopped_t()>>);
+  static_assert(std::same_as<bexec::completion_signatures_of_t<all>,
+                             bexec::completion_signatures<
+                                 bexec::set_error_t(int),
+                                 bexec::set_error_t(std::exception_ptr)>>);
   static_assert(std::same_as<bexec::error_types_of_t<all>,
-                             std::variant<typename all::error_variant>>);
+                             std::variant<int, std::exception_ptr>>);
 
   static_assert(bexec::operation_state<good_operation>);
   static_assert(!bexec::operation_state<throwing_operation>);

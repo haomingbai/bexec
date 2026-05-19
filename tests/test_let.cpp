@@ -13,11 +13,14 @@
  * support for non-movable operation states.
  */
 
+#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/let.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/receiver.hpp>
+#include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
+#include <bexec/then.hpp>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -74,6 +77,19 @@ void test_let() {
     bexec::start(operation);
     CHECK(state->signal == signal_kind::value);
     CHECK(state->int_value == 5);
+  }
+
+  {
+    auto state = std::make_shared<shared_state>();
+    auto sender =
+        bexec::just(1, 2) | bexec::let_value([](int first, int second) {
+          return bexec::just(first + second);
+        });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 3);
   }
 
   {
@@ -172,12 +188,42 @@ void test_let() {
 
   {
     auto state = std::make_shared<shared_state>();
+    auto sender = bexec::just(std::make_unique<int>(20), 2) |
+                  bexec::let_value([](std::unique_ptr<int> value, int extra) {
+                    *value += extra;
+                    return bexec::just(std::move(value));
+                  });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 22);
+  }
+
+  {
+    auto state = std::make_shared<shared_state>();
     auto sender = non_movable_value_sender{9} | bexec::let_value([](int value) {
                     return non_movable_value_sender{value + 1};
                   });
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 10);
+  }
+
+  {
+    bexec::io_context context;
+    auto state = std::make_shared<shared_state>();
+    auto sender = bexec::just(4) | bexec::let_value([&](int value) {
+                    return bexec::schedule(context.get_scheduler()) |
+                           bexec::then([value] { return value + 6; });
+                  });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::none);
+    CHECK(context.run() == 1);
     CHECK(state->signal == signal_kind::value);
     CHECK(state->int_value == 10);
   }

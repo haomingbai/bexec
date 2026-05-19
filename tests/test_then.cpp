@@ -48,6 +48,52 @@ void test_then() {
     CHECK(state->signal == signal_kind::error);
     CHECK(static_cast<bool>(state->exception));
   }
+
+  {
+    auto state = std::make_shared<shared_state>();
+    auto sender = bexec::just_error(6) |
+                  bexec::upon_error([](int value) { return value + 1; });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 7);
+  }
+
+  {
+    auto state = std::make_shared<shared_state>();
+    auto sender = bexec::upon_error(bexec::just_error(3),
+                                    [](int value) { return value + 2; });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 5);
+  }
+
+  {
+    auto state = std::make_shared<shared_state>();
+    auto sender =
+        bexec::just_stopped() | bexec::upon_stopped([] { return 42; });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 42);
+  }
+
+  {
+    auto state = std::make_shared<shared_state>();
+    auto sender = bexec::just_error(1) | bexec::upon_error([](int) {
+                    throw std::runtime_error("boom");
+                    return 0;
+                  });
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::error);
+    CHECK(static_cast<bool>(state->exception));
+  }
 }
 
 }  // namespace bexec_tests

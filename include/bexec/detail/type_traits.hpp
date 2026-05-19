@@ -22,6 +22,8 @@
 #include <concepts>
 #include <exception>
 #include <functional>
+#include <optional>
+#include <tuple>
 #include <type_traits>
 #include <variant>
 
@@ -32,6 +34,9 @@ inline constexpr bool dependent_false = false;
 
 template <class T>
 using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
+
+template <class... Ts>
+using decayed_tuple = std::tuple<std::decay_t<Ts>...>;
 
 template <class T, class Variant>
 struct variant_contains;
@@ -62,51 +67,79 @@ inline constexpr bool sender_sends_stopped_v =
     (sender_completion_signatures_t<Sender>::template count_of<
          set_stopped_t>() != 0);
 
-template <class Fn, class Signature>
-struct then_signature;
+template <class Tag, class Fn, class Signature>
+struct completion_adaptor_signature;
 
 template <class Result>
-struct then_value_signature_result {
+struct value_signature_result {
   using type = set_value_t(std::decay_t<Result>);
 };
 
 template <>
-struct then_value_signature_result<void> {
+struct value_signature_result<void> {
   using type = set_value_t();
 };
 
 template <class Fn, class... Args>
-struct then_signature<Fn, set_value_t(Args...)> {
+struct completion_adaptor_signature<set_value_t, Fn, set_value_t(Args...)> {
   using invoke_result = std::invoke_result_t<Fn&, Args...>;
-  using signature = typename then_value_signature_result<invoke_result>::type;
+  using signature = typename value_signature_result<invoke_result>::type;
   using type = type_list<signature>;
 };
 
+template <class Tag, class Fn, class... Args>
+  requires(!std::same_as<Tag, set_value_t>)
+struct completion_adaptor_signature<Tag, Fn, set_value_t(Args...)> {
+  using type = type_list<set_value_t(Args...)>;
+};
+
 template <class Fn, class Error>
-struct then_signature<Fn, set_error_t(Error)> {
+struct completion_adaptor_signature<set_error_t, Fn, set_error_t(Error)> {
+  using invoke_result = std::invoke_result_t<Fn&, Error>;
+  using signature = typename value_signature_result<invoke_result>::type;
+  using type = type_list<signature>;
+};
+
+template <class Tag, class Fn, class Error>
+  requires(!std::same_as<Tag, set_error_t>)
+struct completion_adaptor_signature<Tag, Fn, set_error_t(Error)> {
   using type = type_list<set_error_t(Error)>;
 };
 
 template <class Fn>
-struct then_signature<Fn, set_stopped_t()> {
+struct completion_adaptor_signature<set_stopped_t, Fn, set_stopped_t()> {
+  using invoke_result = std::invoke_result_t<Fn&>;
+  using signature = typename value_signature_result<invoke_result>::type;
+  using type = type_list<signature>;
+};
+
+template <class Tag, class Fn>
+  requires(!std::same_as<Tag, set_stopped_t>)
+struct completion_adaptor_signature<Tag, Fn, set_stopped_t()> {
   using type = type_list<set_stopped_t()>;
 };
 
-template <class Fn, class Completions>
-struct then_completion_signatures;
+template <class Tag, class Fn, class Completions>
+struct completion_adaptor_completion_signatures;
 
-template <class Fn, class... Signatures>
-struct then_completion_signatures<Fn, completion_signatures<Signatures...>> {
-  using transformed =
-      concat_type_lists_t<typename then_signature<Fn, Signatures>::type...>;
+template <class Tag, class Fn, class... Signatures>
+struct completion_adaptor_completion_signatures<
+    Tag, Fn, completion_signatures<Signatures...>> {
+  using transformed = concat_type_lists_t<
+      typename completion_adaptor_signature<Tag, Fn, Signatures>::type...>;
   using with_exception = unique_type_list_t<concat_type_lists_t<
       transformed, type_list<set_error_t(std::exception_ptr)>>>;
   using type = completion_signatures_from_type_list_t<with_exception>;
 };
 
+template <class Tag, class Fn, class Sender>
+using completion_adaptor_completion_signatures_t =
+    typename completion_adaptor_completion_signatures<
+        Tag, Fn, sender_completion_signatures_t<Sender>>::type;
+
 template <class Fn, class Sender>
-using then_completion_signatures_t = typename then_completion_signatures<
-    Fn, sender_completion_signatures_t<Sender>>::type;
+using then_completion_signatures_t =
+    completion_adaptor_completion_signatures_t<set_value_t, Fn, Sender>;
 
 template <class Tag, class Fn, class Signature>
 struct let_signature {
@@ -156,6 +189,128 @@ using sender_errors_with_exception_t =
     unique_type_list_t<concat_type_lists_t<sender_error_types_t<Sender>,
                                            type_list<std::exception_ptr>>>;
 
+template <class Signature>
+struct value_tuple_for_signature {
+  using type = type_list<>;
+};
+
+template <class... Args>
+struct value_tuple_for_signature<set_value_t(Args...)> {
+  using type = type_list<decayed_tuple<Args...>>;
+};
+
+template <class Completions>
+struct value_tuple_list;
+
+template <class... Signatures>
+struct value_tuple_list<completion_signatures<Signatures...>> {
+  using type = concat_type_lists_t<
+      typename value_tuple_for_signature<Signatures>::type...>;
+};
+
+template <class Completions>
+using value_tuple_list_t = typename value_tuple_list<Completions>::type;
+
+template <class Sender>
+using sender_value_tuple_list_t =
+    value_tuple_list_t<sender_completion_signatures_t<Sender>>;
+
+template <class Sender>
+using sender_unique_value_tuple_list_t =
+    unique_type_list_t<sender_value_tuple_list_t<Sender>>;
+
+template <class List>
+struct type_list_size;
+
+template <class... Ts>
+struct type_list_size<type_list<Ts...>>
+    : std::integral_constant<std::size_t, sizeof...(Ts)> {};
+
+template <class List>
+inline constexpr std::size_t type_list_size_v = type_list_size<List>::value;
+
+template <class List>
+struct first_type_in_type_list;
+
+template <class T, class... Rest>
+struct first_type_in_type_list<type_list<T, Rest...>> {
+  using type = T;
+};
+
+template <class List>
+using first_type_in_type_list_t = typename first_type_in_type_list<List>::type;
+
+template <class Sender>
+inline constexpr std::size_t sender_value_completion_count_v =
+    type_list_size_v<sender_value_tuple_list_t<Sender>>;
+
+template <class Sender>
+inline constexpr bool sender_has_single_value_completion_v =
+    (sender_value_completion_count_v<Sender> == 1U);
+
+template <class Sender>
+using sender_single_value_tuple_t =
+    first_type_in_type_list_t<sender_value_tuple_list_t<Sender>>;
+
+template <class Sender>
+using sender_value_slot_t = std::optional<sender_single_value_tuple_t<Sender>>;
+
+template <class Tuple>
+struct set_value_signature_from_tuple;
+
+template <class... Args>
+struct set_value_signature_from_tuple<std::tuple<Args...>> {
+  using type = set_value_t(Args...);
+};
+
+template <class Tuple>
+using set_value_signature_from_tuple_t =
+    typename set_value_signature_from_tuple<Tuple>::type;
+
+template <class... Tuples>
+struct tuple_cat_type;
+
+template <class... Tuples>
+struct tuple_cat_type {
+  using type = decltype(std::tuple_cat(std::declval<Tuples>()...));
+};
+
+template <class... Tuples>
+using tuple_cat_type_t = typename tuple_cat_type<Tuples...>::type;
+
+template <class List>
+struct set_value_signatures_from_tuple_list;
+
+template <class... Tuples>
+struct set_value_signatures_from_tuple_list<type_list<Tuples...>> {
+  using type = type_list<set_value_signature_from_tuple_t<Tuples>...>;
+};
+
+template <class List>
+using set_value_signatures_from_tuple_list_t =
+    typename set_value_signatures_from_tuple_list<List>::type;
+
+template <bool AllSingle, class... Senders>
+struct when_all_value_signature_list_impl {
+  using type = type_list<>;
+};
+
+template <class... Senders>
+struct when_all_value_signature_list_impl<true, Senders...> {
+  using type = type_list<set_value_signature_from_tuple_t<
+      tuple_cat_type_t<sender_single_value_tuple_t<Senders>...>>>;
+};
+
+template <class... Senders>
+struct when_all_value_signature_list
+    : when_all_value_signature_list_impl<
+          (sender_has_single_value_completion_v<Senders> && ...), Senders...> {
+};
+
+template <class... Senders>
+using when_all_value_signature_list_t =
+    typename when_all_value_signature_list<Senders...>::type;
+
 template <class ErrorList>
 struct set_error_signatures_from_type_list;
 
@@ -167,6 +322,42 @@ struct set_error_signatures_from_type_list<type_list<Errors...>> {
 template <class ErrorList>
 using set_error_signatures_from_type_list_t =
     typename set_error_signatures_from_type_list<ErrorList>::type;
+
+template <class List>
+struct value_variant_from_tuple_list;
+
+template <class... Tuples>
+struct value_variant_from_tuple_list<type_list<Tuples...>> {
+  using type = std::variant<Tuples...>;
+};
+
+template <class List>
+using value_variant_from_tuple_list_t =
+    typename value_variant_from_tuple_list<List>::type;
+
+template <class Sender>
+using into_variant_value_variant_t =
+    value_variant_from_tuple_list_t<sender_unique_value_tuple_list_t<Sender>>;
+
+template <class Sender>
+using into_variant_value_signature_list_t =
+    type_list<set_value_t(into_variant_value_variant_t<Sender>)>;
+
+template <class Sender>
+struct into_variant_completion_signatures {
+  using values = into_variant_value_signature_list_t<Sender>;
+  using errors = set_error_signatures_from_type_list_t<
+      sender_errors_with_exception_t<Sender>>;
+  using stopped = std::conditional_t<sender_sends_stopped_v<Sender>,
+                                     type_list<set_stopped_t()>, type_list<>>;
+  using signatures =
+      unique_type_list_t<concat_type_lists_t<values, errors, stopped>>;
+  using type = completion_signatures_from_type_list_t<signatures>;
+};
+
+template <class Sender>
+using into_variant_completion_signatures_t =
+    typename into_variant_completion_signatures<Sender>::type;
 
 struct empty_callback {
   void operator()() const noexcept {}

@@ -74,5 +74,43 @@ class env_with_stop_token {
   BaseEnv base_;
 };
 
+/**
+ * @brief Environment wrapper that overrides get_scheduler and delegates other
+ * queries.
+ */
+template <class Scheduler, class BaseEnv = empty_env>
+class env_with_scheduler {
+ public:
+  env_with_scheduler(Scheduler scheduler, BaseEnv base = {})
+      : scheduler_(std::move(scheduler)), base_(std::move(base)) {}
+
+  [[nodiscard]] Scheduler query(get_scheduler_t) const noexcept {
+    return scheduler_;
+  }
+
+  [[nodiscard]] Scheduler query(get_delegation_scheduler_t) const noexcept {
+    return scheduler_;
+  }
+
+  template <class QueryTag, class... Args>
+    requires(!std::same_as<std::remove_cvref_t<QueryTag>, get_scheduler_t> &&
+             !std::same_as<std::remove_cvref_t<QueryTag>,
+                           get_delegation_scheduler_t> &&
+             requires(const BaseEnv& base, QueryTag&& tag, Args&&... args) {
+               bexec::query(base, std::forward<QueryTag>(tag),
+                            std::forward<Args>(args)...);
+             })
+  decltype(auto) query(QueryTag&& tag, Args&&... args) const
+      noexcept(noexcept(bexec::query(base_, std::forward<QueryTag>(tag),
+                                     std::forward<Args>(args)...))) {
+    return bexec::query(base_, std::forward<QueryTag>(tag),
+                        std::forward<Args>(args)...);
+  }
+
+ private:
+  Scheduler scheduler_;
+  BaseEnv base_;
+};
+
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_ENV_HPP_

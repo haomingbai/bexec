@@ -1,16 +1,16 @@
 /**
  * @file include/bexec/when_all.hpp
- * @brief Public when_all sender algorithm.
+ * @brief Public when_all sender algorithms.
  * @author Haoming Bai <haomingbai@hotmail.com>
- * @date   2026-05-12
+ * @date   2026-05-19
  *
  * Copyright © 2026 Haoming Bai
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Defines a sender that starts all child senders, waits for every started
- * child to finish, discards success values, and propagates the first error or
- * stopped signal.
+ * Defines when_all and when_all_with_variant. Successful when_all completion
+ * sends the concatenated child values in argument order. Errors are delivered
+ * as their original error type.
  */
 
 #pragma once
@@ -23,7 +23,9 @@
 #include <bexec/detail/config.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/detail/when_all.hpp>
+#include <bexec/into_variant.hpp>
 #include <bexec/receiver.hpp>
+#include <bexec/sender.hpp>
 #include <concepts>
 #include <exception>
 #include <tuple>
@@ -34,19 +36,24 @@ namespace bexec {
 
 /**
  * @brief Sender that waits for all child senders.
- *
- * Successful child values are currently discarded; all-success completion sends
- * set_value() with no values. The first error or stopped signal determines the
- * final terminal signal, but completion is delayed until all started children
- * have finished.
  */
 template <class... Senders>
 class when_all_sender {
+  static_assert(sizeof...(Senders) != 0,
+                "when_all requires at least one sender");
+  static_assert(((detail::sender_value_completion_count_v<Senders> <= 1U) &&
+                 ...),
+                "when_all requires each child sender to have at most one "
+                "value completion; use when_all_with_variant for multiple "
+                "value alternatives");
+
  public:
-  using error_variant = detail::when_all_error_variant_t<Senders...>;
   using completion_signatures =
-      bexec::completion_signatures<set_value_t(), set_error_t(error_variant),
-                                   set_stopped_t()>;
+      detail::when_all_completion_signatures_t<Senders...>;
+  using error_variant = detail::when_all_error_variant_t<Senders...>;
+  using values_tuple = detail::when_all_values_tuple_t<Senders...>;
+  static constexpr bool sends_value =
+      (detail::sender_has_single_value_completion_v<Senders> && ...);
 
   explicit when_all_sender(Senders... senders)
       : senders_(std::move(senders)...) {}
@@ -55,10 +62,12 @@ class when_all_sender {
   class operation {
    public:
     using sender_tuple = std::tuple<Senders...>;
-    using state_type = detail::when_all_state<Receiver, error_variant>;
+    using state_type = detail::when_all_state<Receiver, error_variant,
+                                              values_tuple, sends_value>;
     using indices = std::index_sequence_for<Senders...>;
     using operation_tuple =
         typename detail::when_all_operation_tuple<Receiver, error_variant,
+                                                  values_tuple, sends_value,
                                                   sender_tuple, indices>::type;
 
     operation(sender_tuple senders, Receiver receiver)
@@ -70,13 +79,7 @@ class when_all_sender {
     operation(operation&&) = delete;
     operation& operator=(operation&&) = delete;
 
-    void start() noexcept {
-      if constexpr (sizeof...(Senders) == 0) {
-        state_.complete_empty();
-      } else {
-        start_all(indices{});
-      }
-    }
+    void start() noexcept { start_all(indices{}); }
 
    private:
     template <std::size_t... Indices>
@@ -89,6 +92,7 @@ class when_all_sender {
       using child_receiver = detail::when_all_child_receiver<Index, state_type>;
       using child_operation =
           detail::when_all_child_operation_t<Receiver, error_variant,
+                                             values_tuple, sends_value,
                                              sender_tuple, Index>;
       auto& slot = std::get<Index>(operations_);
 
@@ -132,13 +136,29 @@ class when_all_sender {
  */
 struct when_all_t {
   template <sender... Senders>
+    requires(sizeof...(Senders) != 0 &&
+             ((detail::sender_value_completion_count_v<
+                   detail::remove_cvref_t<Senders>> <= 1U) &&
+              ...))
   [[nodiscard]] auto operator()(Senders&&... senders) const {
     return when_all_sender<detail::remove_cvref_t<Senders>...>{
         std::forward<Senders>(senders)...};
   }
 };
 
+/**
+ * @brief Function object that creates when_all(into_variant(sender)...).
+ */
+struct when_all_with_variant_t {
+  template <sender... Senders>
+    requires(sizeof...(Senders) != 0)
+  [[nodiscard]] auto operator()(Senders&&... senders) const {
+    return when_all_t{}(bexec::into_variant(std::forward<Senders>(senders))...);
+  }
+};
+
 inline constexpr when_all_t when_all{};
+inline constexpr when_all_with_variant_t when_all_with_variant{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_WHEN_ALL_HPP_

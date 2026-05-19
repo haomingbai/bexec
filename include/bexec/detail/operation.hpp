@@ -30,7 +30,7 @@ class pass_through_operation {
 
   template <class Factory>
   explicit pass_through_operation(std::in_place_t, Factory&& factory)
-      : operation_(std::forward<Factory>(factory)()) {}
+      : operation_(std::invoke(std::forward<Factory>(factory))) {}
 
   void start() noexcept { bexec::start(operation_); }
 

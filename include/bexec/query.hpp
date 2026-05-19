@@ -65,9 +65,24 @@ struct get_scheduler_t {
   }
 };
 
+/**
+ * @brief Query object used to obtain a delegation scheduler from an
+ * environment.
+ */
+struct get_delegation_scheduler_t {
+  template <class Env>
+    requires requires(Env&& env, const get_delegation_scheduler_t& self) {
+      std::as_const(env).query(self);
+    }
+  constexpr decltype(auto) operator()(Env&& env) const noexcept {
+    return std::as_const(env).query(*this);
+  }
+};
+
 inline constexpr get_stop_token_t get_stop_token{};
 inline constexpr get_allocator_t get_allocator{};
 inline constexpr get_scheduler_t get_scheduler{};
+inline constexpr get_delegation_scheduler_t get_delegation_scheduler{};
 
 /**
  * @brief Invokes a query object with a queryable object.

@@ -109,6 +109,7 @@ struct variant_receiver {
 
 void test_concepts();
 void test_completion_signatures();
+void test_counting_scope();
 void test_env();
 void test_just();
 void test_let();

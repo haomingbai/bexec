@@ -15,6 +15,7 @@ add_executable(
     test_main.cpp
     test_completion_signatures.cpp
     test_concepts.cpp
+    test_counting_scope.cpp
     test_env.cpp
     test_just.cpp
     test_let.cpp

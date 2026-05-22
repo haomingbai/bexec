@@ -19,6 +19,7 @@
 
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>
+#include <bexec/counting_scope.hpp>
 #include <bexec/cpo.hpp>
 #include <bexec/env.hpp>
 #include <bexec/into_variant.hpp>

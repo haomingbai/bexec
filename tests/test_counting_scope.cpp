@@ -9,12 +9,14 @@
  */
 
 #include <bexec/counting_scope.hpp>
+#include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
 #include <bexec/run_loop.hpp>
 #include <bexec/sender.hpp>
 #include <memory>
+#include <string>
 #include <utility>
 
 #include "test_support.hpp"
@@ -57,6 +59,43 @@ static_assert(bexec::scope_association<counting_scope_association_type>);
 struct stop_observer_state {
   bool value{false};
   bool stopped{false};
+};
+
+struct future_receiver_state {
+  bexec_tests::signal_kind signal{bexec_tests::signal_kind::none};
+  int first{0};
+  std::string second;
+  std::string error;
+};
+
+struct future_receiver {
+  std::shared_ptr<future_receiver_state> state =
+      std::make_shared<future_receiver_state>();
+
+  void set_value() noexcept { state->signal = signal_kind::value; }
+
+  void set_value(int value) noexcept {
+    state->signal = signal_kind::value;
+    state->first = value;
+  }
+
+  void set_value(int first, std::string second) noexcept {
+    state->signal = signal_kind::value;
+    state->first = first;
+    state->second = std::move(second);
+  }
+
+  void set_error(std::string error) noexcept {
+    state->signal = signal_kind::error;
+    state->error = std::move(error);
+  }
+
+  template <class Error>
+  void set_error(Error&&) noexcept {
+    state->signal = signal_kind::error;
+  }
+
+  void set_stopped() noexcept { state->signal = signal_kind::stopped; }
 };
 
 class stop_observing_sender {
@@ -180,6 +219,81 @@ class flag_sender {
 
  private:
   bool* started_;
+};
+
+struct async_stop_state {
+  bool started{false};
+  bool stop_requested{false};
+  bool destroyed{false};
+  void* operation{nullptr};
+  void (*complete)(void*) noexcept {nullptr};
+  void (*check_stop)(void*) noexcept {nullptr};
+};
+
+class async_stop_sender {
+ public:
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t(),
+                                   bexec::set_stopped_t()>;
+
+  explicit async_stop_sender(async_stop_state& state) noexcept
+      : state_(&state) {}
+
+  template <class Receiver>
+  class operation {
+   public:
+    using stop_token_type = decltype(bexec::get_stop_token(
+        bexec::get_env(std::declval<Receiver&>())));
+
+    operation(async_stop_state& state, Receiver receiver)
+        : state_(&state),
+          receiver_(std::move(receiver)),
+          stop_token_(bexec::get_stop_token(bexec::get_env(receiver_))) {}
+
+    operation(const operation&) = delete;
+    operation& operator=(const operation&) = delete;
+    operation(operation&&) = delete;
+    operation& operator=(operation&&) = delete;
+
+    ~operation() { state_->destroyed = true; }
+
+    void start() noexcept {
+      state_->started = true;
+      state_->operation = this;
+      state_->complete = [](void* raw) noexcept {
+        static_cast<operation*>(raw)->complete();
+      };
+      state_->check_stop = [](void* raw) noexcept {
+        static_cast<operation*>(raw)->check_stop();
+      };
+    }
+
+   private:
+    void check_stop() noexcept {
+      state_->stop_requested = stop_token_.stop_requested();
+    }
+
+    void complete() noexcept {
+      check_stop();
+      if (state_->stop_requested) {
+        bexec::set_stopped(std::move(receiver_));
+      } else {
+        bexec::set_value(std::move(receiver_));
+      }
+    }
+
+    async_stop_state* state_;
+    Receiver receiver_;
+    stop_token_type stop_token_;
+  };
+
+  template <class Receiver>
+  auto connect(Receiver receiver) const {
+    return operation<Receiver>{*state_, std::move(receiver)};
+  }
+
+ private:
+  async_stop_state* state_;
 };
 
 template <class Receiver>
@@ -351,6 +465,139 @@ void test_counting_scope() {
     bool started = false;
     bexec::spawn(flag_sender{started}, scope.get_token());
     CHECK(!started);
+  }
+
+  {
+    bexec::counting_scope scope;
+    auto future = bexec::spawn_future(bexec::just(42), scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+
+    CHECK(state->signal == signal_kind::none);
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->first == 42);
+  }
+
+  {
+    bexec::counting_scope scope;
+    auto future = bexec::spawn_future(bexec::just(7, std::string{"ready"}),
+                                      scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->first == 7);
+    CHECK(state->second == "ready");
+  }
+
+  {
+    bexec::counting_scope scope;
+    auto future = bexec::spawn_future(bexec::just_error(std::string{"failed"}),
+                                      scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::error);
+    CHECK(state->error == "failed");
+  }
+
+  {
+    bexec::counting_scope scope;
+    auto future = bexec::spawn_future(bexec::just_stopped(), scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::stopped);
+  }
+
+  {
+    bexec::counting_scope scope;
+    scope.close();
+    bool started = false;
+    auto future = bexec::spawn_future(flag_sender{started}, scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(!started);
+    CHECK(state->signal == signal_kind::stopped);
+  }
+
+  {
+    bexec::counting_scope scope;
+    lifetime_state child_state;
+    auto future =
+        bexec::spawn_future(lifetime_sender{child_state}, scope.get_token());
+    CHECK(child_state.started);
+    CHECK(!child_state.destroyed);
+
+    bexec::run_loop loop;
+    env_receiver<scheduler_env> join_receiver;
+    join_receiver.env = scheduler_env{loop.get_scheduler()};
+    auto join_state = join_receiver.state;
+    auto join_operation = connect_join(scope, std::move(join_receiver));
+    bexec::start(join_operation);
+    CHECK(join_state->signal == signal_kind::none);
+
+    child_state.complete(child_state.operation);
+    CHECK(!child_state.destroyed);
+    CHECK(join_state->signal == signal_kind::none);
+    CHECK(loop.run_one() == 0);
+
+    {
+      future_receiver receiver;
+      auto state = receiver.state;
+      auto future_operation =
+          bexec::connect(std::move(future), std::move(receiver));
+      bexec::start(future_operation);
+      CHECK(state->signal == signal_kind::value);
+      CHECK(join_state->signal == signal_kind::none);
+    }
+
+    CHECK(child_state.destroyed);
+    CHECK(loop.run_one() == 1);
+    CHECK(join_state->signal == signal_kind::value);
+  }
+
+  {
+    bexec::counting_scope scope;
+    async_stop_state child_state;
+
+    {
+      auto future = bexec::spawn_future(async_stop_sender{child_state},
+                                        scope.get_token());
+      CHECK(child_state.started);
+      CHECK(!child_state.stop_requested);
+    }
+
+    child_state.check_stop(child_state.operation);
+    CHECK(child_state.stop_requested);
+    CHECK(!child_state.destroyed);
+    child_state.complete(child_state.operation);
+    CHECK(child_state.destroyed);
+
+    bexec::run_loop loop;
+    env_receiver<scheduler_env> receiver;
+    receiver.env = scheduler_env{loop.get_scheduler()};
+    auto state = receiver.state;
+    auto operation = connect_join(scope, std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
   }
 }
 

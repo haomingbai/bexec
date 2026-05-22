@@ -30,8 +30,10 @@
 #include <memory>
 #include <mutex>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
 
 namespace bexec {
 
@@ -364,6 +366,378 @@ class spawn_operation {
   std::mutex mutex_;
   bool starting_{false};
   bool completed_{false};
+};
+
+template <class Signature>
+struct spawn_future_result_tuple;
+
+template <class Tag, class... Args>
+struct spawn_future_result_tuple<Tag(Args...)> {
+  using type = std::tuple<Tag, std::decay_t<Args>...>;
+};
+
+template <class Signature>
+using spawn_future_result_tuple_t =
+    typename spawn_future_result_tuple<Signature>::type;
+
+template <class Signature>
+struct spawn_future_decayed_signature;
+
+template <class Tag, class... Args>
+struct spawn_future_decayed_signature<Tag(Args...)> {
+  using type = Tag(std::decay_t<Args>...);
+};
+
+template <class Signature>
+using spawn_future_decayed_signature_t =
+    typename spawn_future_decayed_signature<Signature>::type;
+
+template <class Signature>
+struct spawn_future_signature_nothrow_decay;
+
+template <class Tag, class... Args>
+struct spawn_future_signature_nothrow_decay<Tag(Args...)>
+    : std::bool_constant<(
+          std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...)> {};
+
+template <bool Include, class... Ts>
+struct spawn_future_maybe_type_list {
+  using type = type_list<>;
+};
+
+template <class... Ts>
+struct spawn_future_maybe_type_list<true, Ts...> {
+  using type = type_list<Ts...>;
+};
+
+template <bool Include, class... Ts>
+using spawn_future_maybe_type_list_t =
+    typename spawn_future_maybe_type_list<Include, Ts...>::type;
+
+template <class Completions>
+struct spawn_future_all_nothrow_decay;
+
+template <class... Signatures>
+struct spawn_future_all_nothrow_decay<completion_signatures<Signatures...>>
+    : std::bool_constant<(
+          spawn_future_signature_nothrow_decay<Signatures>::value && ...)> {};
+
+template <class Completions>
+inline constexpr bool spawn_future_all_nothrow_decay_v =
+    spawn_future_all_nothrow_decay<Completions>::value;
+
+template <class Completions>
+struct spawn_future_result_variant;
+
+template <class... Signatures>
+struct spawn_future_result_variant<completion_signatures<Signatures...>> {
+  using exception_result = std::tuple<set_error_t, std::exception_ptr>;
+  using result_list = unique_type_list_t<concat_type_lists_t<
+      type_list<std::monostate, std::tuple<set_stopped_t>>,
+      spawn_future_maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
+                                         completion_signatures<Signatures...>>,
+                                     exception_result>,
+      type_list<spawn_future_result_tuple_t<Signatures>...>>>;
+  using type = variant_from_type_list_t<result_list>;
+};
+
+template <class Completions>
+using spawn_future_result_variant_t =
+    typename spawn_future_result_variant<Completions>::type;
+
+template <class Completions>
+struct spawn_future_completion_signatures;
+
+template <class... Signatures>
+struct spawn_future_completion_signatures<
+    completion_signatures<Signatures...>> {
+  using exception_signature = set_error_t(std::exception_ptr);
+  using signature_list = unique_type_list_t<concat_type_lists_t<
+      type_list<set_stopped_t()>,
+      spawn_future_maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
+                                         completion_signatures<Signatures...>>,
+                                     exception_signature>,
+      type_list<spawn_future_decayed_signature_t<Signatures>...>>>;
+  using type = completion_signatures_from_type_list_t<signature_list>;
+};
+
+template <class Completions>
+using spawn_future_completion_signatures_t =
+    typename spawn_future_completion_signatures<Completions>::type;
+
+template <class State, class Env>
+class spawn_future_receiver {
+ public:
+  spawn_future_receiver(State* state, inplace_stop_token stop_token,
+                        const Env& env) noexcept
+      : state_(state), stop_token_(std::move(stop_token)), env_(&env) {}
+
+  [[nodiscard]] auto get_env() const noexcept {
+    return env_with_scope_stop_token<const Env&>{stop_token_, *env_};
+  }
+
+  template <class... Args>
+  void set_value(Args&&... args) noexcept {
+    set_complete<set_value_t>(std::forward<Args>(args)...);
+  }
+
+  template <class Error>
+  void set_error(Error&& error) noexcept {
+    set_complete<set_error_t>(std::forward<Error>(error));
+  }
+
+  void set_stopped() noexcept { set_complete<set_stopped_t>(); }
+
+ private:
+  template <class Tag, class... Args>
+  void set_complete(Args&&... args) noexcept {
+    using result_type = std::tuple<Tag, std::decay_t<Args>...>;
+    constexpr bool nothrow =
+        (std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...);
+
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    try {
+#endif
+      state_->result().template emplace<result_type>(
+          Tag{}, std::forward<Args>(args)...);
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    } catch (...) {
+      if constexpr (!nothrow) {
+        using error_result = std::tuple<set_error_t, std::exception_ptr>;
+        state_->result().template emplace<error_result>(
+            set_error_t{}, std::current_exception());
+      } else {
+        std::terminate();
+      }
+    }
+#else
+    (void)nothrow;
+#endif
+
+    state_->complete();
+  }
+
+  State* state_;
+  inplace_stop_token stop_token_;
+  const Env* env_;
+};
+
+template <class Sender, class Token, class Env, class ByteAllocator>
+class spawn_future_state {
+ public:
+  using completions = typename remove_cvref_t<Sender>::completion_signatures;
+  using completion_signatures =
+      spawn_future_completion_signatures_t<completions>;
+  using result_variant = spawn_future_result_variant_t<completions>;
+  using receiver_type = spawn_future_receiver<spawn_future_state, Env>;
+  using operation_type = decltype(bexec::connect(
+      std::declval<Sender>(), std::declval<receiver_type>()));
+  using byte_allocator_type = ByteAllocator;
+  using allocator_type = typename std::allocator_traits<
+      byte_allocator_type>::template rebind_alloc<spawn_future_state>;
+  using allocator_traits = std::allocator_traits<allocator_type>;
+  using association_type =
+      remove_cvref_t<decltype(std::declval<Token&>().try_associate())>;
+
+  spawn_future_state(byte_allocator_type byte_allocator, Sender&& sender,
+                     Token token, Env env)
+      : byte_allocator_(std::move(byte_allocator)),
+        env_(std::move(env)),
+        operation_(bexec::connect(
+            std::move(sender),
+            receiver_type{this, stop_source_.get_token(), env_})) {
+    association_ = token.try_associate();
+    if (association_) {
+      bexec::start(operation_);
+    } else {
+      bexec::set_stopped(receiver_type{this, stop_source_.get_token(), env_});
+    }
+  }
+
+  spawn_future_state(const spawn_future_state&) = delete;
+  spawn_future_state& operator=(const spawn_future_state&) = delete;
+  spawn_future_state(spawn_future_state&&) = delete;
+  spawn_future_state& operator=(spawn_future_state&&) = delete;
+
+  [[nodiscard]] result_variant& result() noexcept { return result_; }
+
+  void complete() noexcept {
+    void* receiver = nullptr;
+    void (*deliver)(spawn_future_state*, void*) noexcept = nullptr;
+    bool destroy = false;
+    {
+      std::lock_guard lock(mutex_);
+      completed_ = true;
+      if (consumer_ != nullptr) {
+        receiver = consumer_;
+        deliver = deliver_;
+      } else if (abandoned_) {
+        destroy = true;
+      }
+    }
+
+    if (deliver != nullptr) {
+      deliver(this, receiver);
+    } else if (destroy) {
+      destroy_self();
+    }
+  }
+
+  template <class Receiver>
+  void consume(Receiver& receiver) noexcept {
+    bool deliver_now = false;
+    {
+      std::lock_guard lock(mutex_);
+      if (completed_) {
+        deliver_now = true;
+      } else {
+        consumer_ = &receiver;
+        deliver_ = deliver_to_receiver<Receiver>;
+      }
+    }
+
+    if (deliver_now) {
+      deliver_to_receiver<Receiver>(this, &receiver);
+    }
+  }
+
+  void abandon() noexcept {
+    bool destroy = false;
+    bool request_stop = false;
+    {
+      std::lock_guard lock(mutex_);
+      if (completed_) {
+        destroy = true;
+      } else {
+        abandoned_ = true;
+        request_stop = true;
+      }
+    }
+
+    if (request_stop) {
+      stop_source_.request_stop();
+    }
+    if (destroy) {
+      destroy_self();
+    }
+  }
+
+ private:
+  template <class Receiver>
+  static void deliver_to_receiver(spawn_future_state* state,
+                                  void* raw_receiver) noexcept {
+    Receiver& receiver = *static_cast<Receiver*>(raw_receiver);
+    std::visit(
+        [&receiver](auto& result) noexcept {
+          using result_type = remove_cvref_t<decltype(result)>;
+          if constexpr (!std::same_as<result_type, std::monostate>) {
+            std::apply(
+                [&receiver](auto& tag, auto&... values) noexcept {
+                  tag(std::move(receiver), std::move(values)...);
+                },
+                result);
+          }
+        },
+        state->result_);
+  }
+
+  void destroy_self() noexcept {
+    association_type association = std::move(association_);
+    allocator_type allocator{std::move(byte_allocator_)};
+    spawn_future_state* self = this;
+    allocator_traits::destroy(allocator, self);
+    allocator_traits::deallocate(allocator, self, 1);
+  }
+
+  byte_allocator_type byte_allocator_;
+  Env env_;
+  inplace_stop_source stop_source_;
+  operation_type operation_;
+  association_type association_;
+  result_variant result_;
+  std::mutex mutex_;
+  void* consumer_{nullptr};
+  void (*deliver_)(spawn_future_state*, void*) noexcept {nullptr};
+  bool completed_{false};
+  bool abandoned_{false};
+};
+
+template <class State>
+class spawn_future_state_handle {
+ public:
+  spawn_future_state_handle() noexcept = default;
+  explicit spawn_future_state_handle(State* state) noexcept : state_(state) {}
+
+  spawn_future_state_handle(const spawn_future_state_handle&) = delete;
+  spawn_future_state_handle& operator=(const spawn_future_state_handle&) =
+      delete;
+
+  spawn_future_state_handle(spawn_future_state_handle&& other) noexcept
+      : state_(std::exchange(other.state_, nullptr)) {}
+
+  spawn_future_state_handle& operator=(
+      spawn_future_state_handle&& other) noexcept {
+    if (this != &other) {
+      reset();
+      state_ = std::exchange(other.state_, nullptr);
+    }
+    return *this;
+  }
+
+  ~spawn_future_state_handle() { reset(); }
+
+  [[nodiscard]] State* get() const noexcept { return state_; }
+
+ private:
+  void reset() noexcept {
+    if (state_ == nullptr) {
+      return;
+    }
+
+    std::exchange(state_, nullptr)->abandon();
+  }
+
+  State* state_{nullptr};
+};
+
+template <class State>
+class spawn_future_sender {
+ public:
+  using completion_signatures = typename State::completion_signatures;
+
+  explicit spawn_future_sender(spawn_future_state_handle<State> state) noexcept
+      : state_(std::move(state)) {}
+
+  spawn_future_sender(const spawn_future_sender&) = delete;
+  spawn_future_sender& operator=(const spawn_future_sender&) = delete;
+  spawn_future_sender(spawn_future_sender&&) noexcept = default;
+  spawn_future_sender& operator=(spawn_future_sender&&) noexcept = default;
+
+  template <class Receiver>
+  class operation {
+   public:
+    operation(spawn_future_state_handle<State> state, Receiver receiver)
+        : state_(std::move(state)), receiver_(std::move(receiver)) {}
+
+    operation(const operation&) = delete;
+    operation& operator=(const operation&) = delete;
+    operation(operation&&) = delete;
+    operation& operator=(operation&&) = delete;
+
+    void start() noexcept { state_.get()->consume(receiver_); }
+
+   private:
+    spawn_future_state_handle<State> state_;
+    Receiver receiver_;
+  };
+
+  template <class Receiver>
+  auto connect(Receiver receiver) && {
+    return operation<Receiver>{std::move(state_), std::move(receiver)};
+  }
+
+ private:
+  spawn_future_state_handle<State> state_;
 };
 
 }  // namespace detail
@@ -929,6 +1303,53 @@ struct spawn_t {
 };
 
 inline constexpr spawn_t spawn{};
+
+struct spawn_future_t {
+  template <sender Sender, scope_token Token>
+  [[nodiscard]] auto operator()(Sender&& sender, Token token) const {
+    return (*this)(std::forward<Sender>(sender), std::move(token), empty_env{});
+  }
+
+  template <sender Sender, scope_token Token, class Env>
+  [[nodiscard]] auto operator()(Sender&& sender, Token token, Env&& env) const {
+    using env_type = detail::remove_cvref_t<Env>;
+    env_type env_object{std::forward<Env>(env)};
+    auto wrapped_sender =
+        detail::wrap_scope_sender(token, std::forward<Sender>(sender));
+
+    using byte_allocator = decltype(bexec::get_allocator(env_object));
+    using wrapped_sender_type =
+        detail::remove_cvref_t<decltype(wrapped_sender)>;
+    using token_type = detail::remove_cvref_t<Token>;
+    using state_type =
+        detail::spawn_future_state<wrapped_sender_type, token_type, env_type,
+                                   byte_allocator>;
+    using allocator_type = typename state_type::allocator_type;
+    using allocator_traits = std::allocator_traits<allocator_type>;
+
+    byte_allocator byte_alloc = bexec::get_allocator(env_object);
+    allocator_type allocator{byte_alloc};
+    state_type* state = allocator_traits::allocate(allocator, 1);
+
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    try {
+#endif
+      allocator_traits::construct(allocator, state, std::move(byte_alloc),
+                                  std::move(wrapped_sender), std::move(token),
+                                  std::move(env_object));
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    } catch (...) {
+      allocator_traits::deallocate(allocator, state, 1);
+      throw;
+    }
+#endif
+
+    return detail::spawn_future_sender<state_type>{
+        detail::spawn_future_state_handle<state_type>{state}};
+  }
+};
+
+inline constexpr spawn_future_t spawn_future{};
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_COUNTING_SCOPE_HPP_

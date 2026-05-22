@@ -292,6 +292,46 @@ The internal error storage remains a `std::variant` so the operation can keep
 the first error until all children finish. That variant is not the public error
 completion shape.
 
+## Counting Scopes And Spawn
+
+`simple_counting_scope` and `counting_scope` maintain an association count and
+a small state machine. `close()` prevents new associations, and `join()`
+completes only after the scope is closed to new work and the count reaches
+zero. `counting_scope` additionally owns an `inplace_stop_source`; its token
+wraps child senders so scope stop requests are visible through
+`get_stop_token`.
+
+`spawn(sender, token, env)` is the detached form. It obtains an association,
+allocates an operation through `get_allocator(env)`, wraps the input sender
+with the token, and eagerly starts it. The detached receiver accepts only
+`set_value()` and `set_stopped()`; either terminal signal destroys the child
+operation and releases the association.
+
+`spawn_future(sender, token, env)` follows the C++ standard wording shape. It
+first constructs the wrapped child operation, then attempts to associate with
+the scope. If association fails, the child is not started and the future state
+stores `set_stopped()`. If association succeeds, the child is eagerly started
+and its terminal signal is stored in a `std::variant` of decayed completion
+tuples.
+
+The returned future sender is move-only and one-shot. Its heap state supports
+three serialized operations:
+
+- `complete`: records that the child finished and delivers to a registered
+  consumer, if any.
+- `consume`: registers the future receiver, or immediately delivers an already
+  stored result.
+- `abandon`: requests stop through the future state's internal stop source if
+  the child has not completed; otherwise it destroys the state.
+
+Abandoning the future does not complete the future receiver with stopped. It
+only requests stop for the child. The scope association remains held until the
+child sends its terminal signal and the future state is destroyed.
+
+State destruction deliberately moves the association out before destroying and
+deallocating the state, so the association is released only after allocator
+storage is no longer used.
+
 ## Coroutine Design
 
 `task<T>` is a lazy coroutine task. It starts when `start()` is called and

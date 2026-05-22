@@ -51,8 +51,8 @@ factories/adaptors, and focused tests.
   and first-terminal stop propagation.
 - `when_all_with_variant` for child senders with multiple value alternatives.
 - `starts_on(scheduler, sender)` and `on(scheduler, sender)`.
-- Standard-style `simple_counting_scope`, `counting_scope`, and detached
-  `spawn` for scope-tracked fire-and-forget work.
+- Standard-style `simple_counting_scope`, `counting_scope`, detached `spawn`,
+  and `spawn_future` for scope-tracked eager work.
 - `bexec::this_thread::sync_wait(sender)` and
   `bexec::this_thread::sync_wait_with_variant(sender)`.
 - A small coroutine `task<T>` helper.
@@ -62,8 +62,8 @@ factories/adaptors, and focused tests.
 - It is not a complete implementation of P2300.
 - It does not use `tag_invoke`.
 - It does not depend on `stdexec`.
-- It does not provide domains, bulk execution, `spawn_future`, advanced
-  scheduler properties, or ABI-stable boundaries.
+- It does not provide domains, bulk execution, public `associate`,
+  `let_async_scope`, advanced scheduler properties, or ABI-stable boundaries.
 - It does not provide the nonstandard `bexec::sync_wait` alias or
   `on(sender, scheduler)` overload.
 
@@ -148,8 +148,11 @@ context.run();
   alternative. Use `when_all_with_variant` when a child has multiple possible
   value shapes.
 - `spawn(sender, token, env)` accepts detached senders that complete only with
-  `set_value()` and/or `set_stopped()`. Join receivers must expose
-  `get_scheduler` through their environment.
+  `set_value()` and/or `set_stopped()`. `spawn_future(sender, token, env)`
+  eagerly starts the input sender and returns a move-only sender that consumes
+  the stored result. Destroying that returned sender before the child completes
+  requests stop for the child. Join receivers must expose `get_scheduler`
+  through their environment.
 - Demo-only `io_context::post(std::function<void()>)` may allocate. The
   library operation states added for scheduling and waiting use in-place
   operation storage.

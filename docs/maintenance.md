@@ -78,6 +78,24 @@ auto-detects existing source directories such as `include/`, `src/`, `tests/`,
 `clang-format --style=Google`. This controls whitespace and layout only; naming
 still follows the standard-library-style `snake_case` rules above.
 
+## Git Commit Messages
+
+Use English Conventional Commits for new commits. Keep the subject specific,
+imperative, and focused on the user-visible change:
+
+- `feat: add spawn_future`
+- `docs: document async scopes`
+- `fix: release scope association after state destruction`
+- `test: cover abandoned spawn_future`
+
+Use common types such as `feat`, `fix`, `docs`, `test`, `refactor`, `build`,
+and `chore`. Optional scopes are allowed when they add clarity, for example
+`docs(maintenance): describe commit messages`.
+
+Avoid vague subjects such as `update`, `misc`, `changes`, or `fix stuff`. When
+a commit mixes code and tests for one behavior, prefer the behavior type, for
+example `feat` or `fix`, rather than `test`.
+
 ## Adding A Sender
 
 New senders should:

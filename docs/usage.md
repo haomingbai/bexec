@@ -256,6 +256,50 @@ removed from the variant type. Errors and stopped completion are forwarded.
 auto s = bexec::into_variant(maybe_int_or_string());
 ```
 
+## Counting Scopes
+
+`simple_counting_scope` tracks outstanding associations. `counting_scope` adds
+cooperative cancellation with `request_stop()`. Work is associated through a
+scope token:
+
+```cpp
+bexec::counting_scope scope;
+auto token = scope.get_token();
+```
+
+`spawn(sender, token)` eagerly starts detached work and keeps the scope
+associated until the child completes. Detached spawned senders must complete
+only with `set_value()` and/or `set_stopped()`.
+
+```cpp
+bexec::spawn(bexec::just() | bexec::then([] {
+    // Fire-and-forget work.
+}), token);
+```
+
+`spawn_future(sender, token)` eagerly starts the input sender and returns a
+move-only sender that later consumes the stored result:
+
+```cpp
+auto future = bexec::spawn_future(bexec::just(42), token);
+auto result = bexec::this_thread::sync_wait(std::move(future));
+
+if (result) {
+    auto [value] = *result;
+}
+```
+
+If the scope is already closed or joined, `spawn_future` does not start the
+input sender and the returned sender completes with `set_stopped()`. Destroying
+the returned sender before the child completes abandons the future and requests
+stop for the child; the scope association is still released only when the child
+eventually completes.
+
+`close()` prevents new associations. `join()` returns a sender that completes
+after the scope has closed to new work and the association count reaches zero.
+The receiver used with `join()` must expose `get_scheduler` through its
+environment; `this_thread::sync_wait(scope.join())` satisfies that requirement.
+
 ## sync_wait
 
 `bexec::this_thread::sync_wait(sender)` starts a sender and blocks the current

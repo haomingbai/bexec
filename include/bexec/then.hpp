@@ -72,6 +72,12 @@ class completion_adaptor_sender {
   using completion_signatures =
       detail::completion_adaptor_completion_signatures_t<Tag, Fn, Sender>;
 
+  template <class Self, class Env>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    return typename detail::completion_adaptor_completion_signatures<
+        Tag, Fn, detail::sender_completion_signatures_t<Sender, Env>>::type{};
+  }
+
   template <class SenderArg, class FnArg>
     requires std::constructible_from<Sender, SenderArg> &&
                  std::constructible_from<Fn, FnArg>

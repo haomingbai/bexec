@@ -12,6 +12,7 @@
  * selection, stopped propagation, and scheduler-based child completion.
  */
 
+#include <bexec/env.hpp>
 #include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
@@ -101,6 +102,26 @@ struct raw_error_receiver {
   }
 
   void set_stopped() noexcept { state->signal = signal_kind::stopped; }
+};
+
+struct stop_token_receiver {
+  std::shared_ptr<shared_state> state = std::make_shared<shared_state>();
+  bexec::env_with_stop_token<> env;
+
+  explicit stop_token_receiver(bexec::inplace_stop_token token) : env(token) {}
+
+  void set_value() noexcept { state->signal = signal_kind::value; }
+
+  template <class Error>
+  void set_error(Error&&) noexcept {
+    state->signal = signal_kind::error;
+  }
+
+  void set_stopped() noexcept { state->signal = signal_kind::stopped; }
+
+  [[nodiscard]] bexec::env_with_stop_token<> get_env() const noexcept {
+    return env;
+  }
 };
 
 class non_movable_value_sender {
@@ -354,6 +375,25 @@ void test_when_all() {
     CHECK(context.run() == 2);
     CHECK(count == 2);
     CHECK(state->signal == signal_kind::value);
+  }
+
+  {
+    bexec::io_context context;
+    bexec::inplace_stop_source source;
+
+    stop_token_receiver receiver{source.get_token()};
+    auto state = receiver.state;
+
+    auto operation = bexec::connect(
+        bexec::when_all(bexec::schedule(context.get_scheduler()),
+                        bexec::schedule(context.get_scheduler())),
+        std::move(receiver));
+
+    bexec::start(operation);
+    source.request_stop();
+
+    CHECK(context.run() == 2);
+    CHECK(state->signal == signal_kind::stopped);
   }
 
   {

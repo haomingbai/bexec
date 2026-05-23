@@ -48,21 +48,6 @@ struct connect_t {
 
 inline constexpr connect_t connect{};
 
-/**
- * @brief Returns the completion signatures declared by a sender.
- */
-template <class Sender, class Env = empty_env>
-  requires requires {
-    typename detail::remove_cvref_t<Sender>::completion_signatures;
-  }
-[[nodiscard]] consteval auto get_completion_signatures() {
-  return typename detail::remove_cvref_t<Sender>::completion_signatures{};
-}
-
-template <class Sender, class Env = empty_env>
-using completion_signatures_of_t =
-    decltype(bexec::get_completion_signatures<Sender, Env>());
-
 template <class Sender, class Env = empty_env,
           template <class...> class Tuple = std::tuple,
           template <class...> class Variant = variant_or_empty>
@@ -86,25 +71,30 @@ inline constexpr bool sends_stopped =
  */
 template <class Sender>
 concept sender =
-    std::move_constructible<detail::remove_cvref_t<Sender>> &&
-    requires {
-      typename detail::remove_cvref_t<Sender>::completion_signatures;
-    } &&
-    valid_completion_signatures<
-        typename detail::remove_cvref_t<Sender>::completion_signatures>;
+    std::move_constructible<detail::remove_cvref_t<Sender>> && requires {
+      typename bexec::completion_signatures_of_t<Sender>;
+    } && valid_completion_signatures<bexec::completion_signatures_of_t<Sender>>;
+
+template <class Sender, class Env = empty_env>
+concept sender_in =
+    sender<Sender> &&
+    valid_completion_signatures<bexec::completion_signatures_of_t<Sender, Env>>;
 
 /**
  * @brief Concept for sender/receiver pairs connectable through bexec::connect.
  */
 template <class Sender, class Receiver>
-concept sender_to = sender<Sender> &&
-                    receiver_of<Receiver, completion_signatures_of_t<Sender>> &&
-                    requires(Sender&& sender, Receiver&& receiver) {
-                      {
-                        bexec::connect(std::forward<Sender>(sender),
-                                       std::forward<Receiver>(receiver))
-                      } -> operation_state;
-                    };
+concept sender_to =
+    sender_in<Sender, decltype(bexec::get_env(std::declval<Receiver&>()))> &&
+    receiver_of<Receiver, completion_signatures_of_t<
+                              Sender, decltype(bexec::get_env(
+                                          std::declval<Receiver&>()))>> &&
+    requires(Sender&& sender, Receiver&& receiver) {
+      {
+        bexec::connect(std::forward<Sender>(sender),
+                       std::forward<Receiver>(receiver))
+      } -> operation_state;
+    };
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_SENDER_HPP_

@@ -14,6 +14,7 @@
 #define BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_
 
 #include <bexec/detail/config.hpp>
+#include <bexec/detail/erased_lifetime.hpp>
 #include <bexec/detail/manual_lifetime.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/env.hpp>
@@ -30,39 +31,61 @@
 
 namespace bexec::detail {
 
-template <class Sender,
-          bool HasValue = sender_has_single_value_completion_v<Sender>>
-struct when_all_value_slot {
+template <class Sender, bool HasValue, class... Env>
+struct when_all_value_slot_impl {
   using type = std::monostate;
 };
 
-template <class Sender>
-struct when_all_value_slot<Sender, true> {
-  using type = std::optional<sender_single_value_tuple_t<Sender>>;
+template <class Sender, class... Env>
+struct when_all_value_slot_impl<Sender, true, Env...> {
+  using type = std::optional<sender_single_value_tuple_t<Sender, Env...>>;
 };
 
-template <class Sender>
-using when_all_value_slot_t = typename when_all_value_slot<Sender>::type;
+template <class Sender, class... Env>
+using when_all_value_slot_t = typename when_all_value_slot_impl<
+    Sender, sender_has_single_value_completion_v<Sender, Env...>, Env...>::type;
 
 template <class... Senders>
 using when_all_values_tuple_t = std::tuple<when_all_value_slot_t<Senders>...>;
+
+template <class Env, class... Senders>
+using when_all_values_tuple_for_env_t =
+    std::tuple<when_all_value_slot_t<Senders, Env>...>;
 
 template <class... Senders>
 using when_all_error_list_t =
     unique_type_list_t<concat_type_lists_t<sender_error_types_t<Senders>...,
                                            type_list<std::exception_ptr>>>;
 
+template <class Env, class... Senders>
+using when_all_error_list_for_env_t = unique_type_list_t<concat_type_lists_t<
+    sender_error_types_t<Senders, Env>..., type_list<std::exception_ptr>>>;
+
 template <class... Senders>
 using when_all_error_variant_t =
     variant_from_type_list_t<when_all_error_list_t<Senders...>>;
+
+template <class Env, class... Senders>
+using when_all_error_variant_for_env_t =
+    variant_from_type_list_t<when_all_error_list_for_env_t<Env, Senders...>>;
 
 template <class... Senders>
 using when_all_error_signature_list_t =
     set_error_signatures_from_type_list_t<when_all_error_list_t<Senders...>>;
 
+template <class Env, class... Senders>
+using when_all_error_signature_list_for_env_t =
+    set_error_signatures_from_type_list_t<
+        when_all_error_list_for_env_t<Env, Senders...>>;
+
 template <class... Senders>
 using when_all_stopped_signature_list_t =
     std::conditional_t<(sender_sends_stopped_v<Senders> || ...),
+                       type_list<set_stopped_t()>, type_list<>>;
+
+template <class Env, class... Senders>
+using when_all_stopped_signature_list_for_env_t =
+    std::conditional_t<(sender_sends_stopped_v<Senders, Env> || ...),
                        type_list<set_stopped_t()>, type_list<>>;
 
 template <class... Senders>
@@ -78,11 +101,67 @@ template <class... Senders>
 using when_all_completion_signatures_t =
     typename when_all_completion_signatures<Senders...>::type;
 
+template <class Env, class... Senders>
+struct when_all_completion_signatures_for_env {
+  using signatures = unique_type_list_t<concat_type_lists_t<
+      when_all_value_signature_list_for_env_t<Env, Senders...>,
+      when_all_error_signature_list_for_env_t<Env, Senders...>,
+      when_all_stopped_signature_list_for_env_t<Env, Senders...>>>;
+  using type = completion_signatures_from_type_list_t<signatures>;
+};
+
+template <class Env, class... Senders>
+using when_all_completion_signatures_for_env_t =
+    typename when_all_completion_signatures_for_env<Env, Senders...>::type;
+
 template <class Receiver, class ErrorVariant, class ValuesTuple,
           bool SendsValue>
 struct when_all_state {
+  struct on_stop_request {
+    inplace_stop_source* source;
+
+    void operator()() const noexcept { source->request_stop(); }
+  };
+
   explicit when_all_state(Receiver recv, std::size_t count)
       : receiver(std::move(recv)), remaining(count) {}
+
+  bool register_stop_callback() noexcept {
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    try {
+#endif
+      auto token = bexec::get_stop_token(bexec::get_env(receiver));
+      using token_type = decltype(token);
+      if constexpr (!std::is_same_v<remove_cvref_t<token_type>,
+                                    bexec::never_stop_token>) {
+        using callback_type = typename remove_cvref_t<
+            token_type>::template callback_type<on_stop_request>;
+        on_stop.template emplace<callback_type>(std::move(token),
+                                                on_stop_request{&stop_source});
+      }
+      return true;
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+    } catch (...) {
+      start_error(std::current_exception());
+      return false;
+    }
+#endif
+  }
+
+  void start_error(std::exception_ptr error_value) noexcept {
+    std::optional<Receiver> receiver_to_complete;
+    {
+      std::lock_guard lock(mutex);
+      if (completed) {
+        return;
+      }
+      completed = true;
+      remaining = 0;
+      receiver_to_complete.emplace(std::move(receiver));
+    }
+
+    bexec::set_error(std::move(*receiver_to_complete), std::move(error_value));
+  }
 
   template <std::size_t Index, class... Args>
   void child_value(Args&&... args) noexcept {
@@ -169,6 +248,7 @@ struct when_all_state {
           values_to_deliver.emplace(std::move(values));
         }
       }
+      on_stop.reset();
       receiver_to_complete.emplace(std::move(receiver));
     }
 
@@ -240,6 +320,7 @@ struct when_all_state {
   std::size_t remaining;
   std::mutex mutex;
   inplace_stop_source stop_source;
+  erased_lifetime<256> on_stop;
   terminal_kind terminal{terminal_kind::none};
   std::optional<ErrorVariant> error;
   ValuesTuple values;

@@ -235,6 +235,8 @@ On the first error or stopped signal, `when_all` requests stop through its
 internal stop source and waits for all started children to finish before
 completing the receiver. Errors are delivered as their original error type;
 `std::exception_ptr` is also listed for internal connect/start failures.
+If the receiver environment has a stoppable token, requesting that token also
+requests stop for all child senders through the `when_all` environment.
 
 Plain `when_all` requires each child sender to have at most one value
 completion alternative. Use `when_all_with_variant` for senders with multiple
@@ -296,9 +298,12 @@ stop for the child; the scope association is still released only when the child
 eventually completes.
 
 `close()` prevents new associations. `join()` returns a sender that completes
-after the scope has closed to new work and the association count reaches zero.
-The receiver used with `join()` must expose `get_scheduler` through its
-environment; `this_thread::sync_wait(scope.join())` satisfies that requirement.
+when the association count reaches zero; starting a join does not by itself
+close the scope to new work. The receiver used with `join()` must expose
+`get_scheduler` through its environment; `this_thread::sync_wait(scope.join())`
+satisfies that requirement.
+Destroying a scope before it has become unused or joined terminates the
+program; callers must close and join scopes that have accepted work.
 
 ## sync_wait
 

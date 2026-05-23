@@ -48,23 +48,24 @@ struct variant_contains<T, std::variant<Ts...>>
 template <class T, class Variant>
 inline constexpr bool variant_contains_v = variant_contains<T, Variant>::value;
 
-template <class Sender>
+template <class Sender, class... Env>
 struct sender_completion_signatures {
-  using type = typename remove_cvref_t<Sender>::completion_signatures;
+  using type = bexec::completion_signatures_of_t<Sender, Env...>;
 };
 
-template <class Sender>
+template <class Sender, class... Env>
 using sender_completion_signatures_t =
-    typename sender_completion_signatures<Sender>::type;
+    typename sender_completion_signatures<Sender, Env...>::type;
 
-template <class Sender>
+template <class Sender, class... Env>
 using sender_error_types_t =
-    gather_signatures_t<set_error_t, sender_completion_signatures_t<Sender>,
+    gather_signatures_t<set_error_t,
+                        sender_completion_signatures_t<Sender, Env...>,
                         bexec::single_type, type_list>;
 
-template <class Sender>
+template <class Sender, class... Env>
 inline constexpr bool sender_sends_stopped_v =
-    (sender_completion_signatures_t<Sender>::template count_of<
+    (sender_completion_signatures_t<Sender, Env...>::template count_of<
          set_stopped_t>() != 0);
 
 template <class Tag, class Fn, class Signature>
@@ -184,9 +185,53 @@ template <class Tag, class Fn, class Sender>
 using let_completion_signatures_t = typename let_completion_signatures<
     Tag, Fn, sender_completion_signatures_t<Sender>>::type;
 
-template <class Sender>
+template <class Tag, class Fn, class Env, class Signature>
+struct let_signature_for_env {
+  using type = type_list<Signature>;
+};
+
+template <class Fn, class Env, class... Args>
+struct let_signature_for_env<set_value_t, Fn, Env, set_value_t(Args...)> {
+  using sender_type = std::invoke_result_t<Fn&, Args...>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type, Env>>;
+};
+
+template <class Fn, class Env, class Error>
+struct let_signature_for_env<set_error_t, Fn, Env, set_error_t(Error)> {
+  using sender_type = std::invoke_result_t<Fn&, Error>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type, Env>>;
+};
+
+template <class Fn, class Env>
+struct let_signature_for_env<set_stopped_t, Fn, Env, set_stopped_t()> {
+  using sender_type = std::invoke_result_t<Fn&>;
+  using type = completion_signatures_to_type_list_t<
+      sender_completion_signatures_t<sender_type, Env>>;
+};
+
+template <class Tag, class Fn, class Env, class Completions>
+struct let_completion_signatures_for_env;
+
+template <class Tag, class Fn, class Env, class... Signatures>
+struct let_completion_signatures_for_env<Tag, Fn, Env,
+                                         completion_signatures<Signatures...>> {
+  using transformed = concat_type_lists_t<
+      typename let_signature_for_env<Tag, Fn, Env, Signatures>::type...>;
+  using with_exception = unique_type_list_t<concat_type_lists_t<
+      transformed, type_list<set_error_t(std::exception_ptr)>>>;
+  using type = completion_signatures_from_type_list_t<with_exception>;
+};
+
+template <class Tag, class Fn, class Sender, class Env>
+using let_completion_signatures_for_env_t =
+    typename let_completion_signatures_for_env<
+        Tag, Fn, Env, sender_completion_signatures_t<Sender, Env>>::type;
+
+template <class Sender, class... Env>
 using sender_errors_with_exception_t =
-    unique_type_list_t<concat_type_lists_t<sender_error_types_t<Sender>,
+    unique_type_list_t<concat_type_lists_t<sender_error_types_t<Sender, Env...>,
                                            type_list<std::exception_ptr>>>;
 
 template <class Signature>
@@ -211,13 +256,13 @@ struct value_tuple_list<completion_signatures<Signatures...>> {
 template <class Completions>
 using value_tuple_list_t = typename value_tuple_list<Completions>::type;
 
-template <class Sender>
+template <class Sender, class... Env>
 using sender_value_tuple_list_t =
-    value_tuple_list_t<sender_completion_signatures_t<Sender>>;
+    value_tuple_list_t<sender_completion_signatures_t<Sender, Env...>>;
 
-template <class Sender>
+template <class Sender, class... Env>
 using sender_unique_value_tuple_list_t =
-    unique_type_list_t<sender_value_tuple_list_t<Sender>>;
+    unique_type_list_t<sender_value_tuple_list_t<Sender, Env...>>;
 
 template <class List>
 struct type_list_size;
@@ -240,20 +285,21 @@ struct first_type_in_type_list<type_list<T, Rest...>> {
 template <class List>
 using first_type_in_type_list_t = typename first_type_in_type_list<List>::type;
 
-template <class Sender>
+template <class Sender, class... Env>
 inline constexpr std::size_t sender_value_completion_count_v =
-    type_list_size_v<sender_value_tuple_list_t<Sender>>;
+    type_list_size_v<sender_value_tuple_list_t<Sender, Env...>>;
 
-template <class Sender>
+template <class Sender, class... Env>
 inline constexpr bool sender_has_single_value_completion_v =
-    (sender_value_completion_count_v<Sender> == 1U);
+    (sender_value_completion_count_v<Sender, Env...> == 1U);
 
-template <class Sender>
+template <class Sender, class... Env>
 using sender_single_value_tuple_t =
-    first_type_in_type_list_t<sender_value_tuple_list_t<Sender>>;
+    first_type_in_type_list_t<sender_value_tuple_list_t<Sender, Env...>>;
 
-template <class Sender>
-using sender_value_slot_t = std::optional<sender_single_value_tuple_t<Sender>>;
+template <class Sender, class... Env>
+using sender_value_slot_t =
+    std::optional<sender_single_value_tuple_t<Sender, Env...>>;
 
 template <class Tuple>
 struct set_value_signature_from_tuple;
@@ -310,6 +356,27 @@ struct when_all_value_signature_list
 template <class... Senders>
 using when_all_value_signature_list_t =
     typename when_all_value_signature_list<Senders...>::type;
+
+template <bool AllSingle, class Env, class... Senders>
+struct when_all_value_signature_list_for_env_impl {
+  using type = type_list<>;
+};
+
+template <class Env, class... Senders>
+struct when_all_value_signature_list_for_env_impl<true, Env, Senders...> {
+  using type = type_list<set_value_signature_from_tuple_t<
+      tuple_cat_type_t<sender_single_value_tuple_t<Senders, Env>...>>>;
+};
+
+template <class Env, class... Senders>
+struct when_all_value_signature_list_for_env
+    : when_all_value_signature_list_for_env_impl<
+          (sender_has_single_value_completion_v<Senders, Env> && ...), Env,
+          Senders...> {};
+
+template <class Env, class... Senders>
+using when_all_value_signature_list_for_env_t =
+    typename when_all_value_signature_list_for_env<Env, Senders...>::type;
 
 template <class ErrorList>
 struct set_error_signatures_from_type_list;

@@ -104,6 +104,19 @@ concept valid_completion_signatures =
 
 namespace detail {
 
+template <class...>
+inline constexpr bool dependent_false_v = false;
+
+template <class Sender, class... Env>
+concept has_member_get_completion_signatures = requires {
+  std::remove_cvref_t<Sender>::template get_completion_signatures<Sender,
+                                                                  Env...>();
+};
+
+template <class Sender>
+concept has_nested_completion_signatures =
+    requires { typename std::remove_cvref_t<Sender>::completion_signatures; };
+
 template <class... Lists>
 struct concat_type_lists;
 
@@ -258,6 +271,36 @@ using variant_or_empty = typename detail::variant_or_empty<Ts...>::type;
 
 template <class... Ts>
 using single_type = typename detail::single_type<Ts...>::type;
+
+/**
+ * @brief Returns the completion signatures declared by a sender.
+ *
+ * The standard spelling is environment-aware:
+ * get_completion_signatures<Sndr, Env>().
+ *
+ * bexec keeps the old nested completion_signatures fallback so existing
+ * senders remain source-compatible, and also accepts a standard-style static
+ * template member get_completion_signatures<Sndr, Env...>() for senders whose
+ * completion set depends on the receiver environment.
+ */
+template <class Sender, class... Env>
+  requires(sizeof...(Env) <= 1 &&
+           (detail::has_member_get_completion_signatures<Sender, Env...> ||
+            detail::has_nested_completion_signatures<Sender>))
+[[nodiscard]] consteval auto get_completion_signatures() {
+  using sender_type = std::remove_cvref_t<Sender>;
+  if constexpr (detail::has_member_get_completion_signatures<Sender, Env...>) {
+    return sender_type::template get_completion_signatures<Sender, Env...>();
+  } else {
+    static_assert(detail::has_nested_completion_signatures<Sender>);
+    return typename sender_type::completion_signatures{};
+  }
+}
+
+template <class Sender, class... Env>
+  requires(sizeof...(Env) <= 1)
+using completion_signatures_of_t =
+    decltype(bexec::get_completion_signatures<Sender, Env...>());
 
 }  // namespace bexec
 #endif  // BEXEC_INCLUDE_BEXEC_COMPLETION_SIGNATURES_HPP_

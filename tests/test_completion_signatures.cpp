@@ -63,6 +63,36 @@ template <class Receiver>
 concept lvalue_set_value_receiver =
     requires(Receiver receiver) { bexec::set_value(receiver); };
 
+struct get_flag_t {
+  template <class Env>
+  constexpr auto operator()(Env&& env) const noexcept
+      -> decltype(std::as_const(env).query(*this)) {
+    return std::as_const(env).query(*this);
+  }
+};
+
+inline constexpr get_flag_t get_flag{};
+
+struct flag_env {
+  [[nodiscard]] int query(get_flag_t) const noexcept { return 1; }
+};
+
+struct env_dependent_sender {
+  template <class Self>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    return bexec::completion_signatures<bexec::set_value_t()>{};
+  }
+
+  template <class Self, class Env>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    if constexpr (requires { bexec::query(std::declval<Env>(), get_flag); }) {
+      return bexec::completion_signatures<bexec::set_value_t(int)>{};
+    } else {
+      return bexec::completion_signatures<bexec::set_value_t()>{};
+    }
+  }
+};
+
 }  // namespace
 
 void test_completion_signatures() {
@@ -127,6 +157,28 @@ void test_completion_signatures() {
                                  bexec::set_error_t(std::exception_ptr)>>);
   static_assert(std::same_as<bexec::error_types_of_t<all>,
                              std::variant<int, std::exception_ptr>>);
+
+  static_assert(bexec::sender<env_dependent_sender>);
+  static_assert(bexec::sender_in<env_dependent_sender, flag_env>);
+  static_assert(
+      std::same_as<bexec::completion_signatures_of_t<env_dependent_sender>,
+                   bexec::completion_signatures<bexec::set_value_t()>>);
+  static_assert(
+      std::same_as<
+          bexec::completion_signatures_of_t<env_dependent_sender, flag_env>,
+          bexec::completion_signatures<bexec::set_value_t(int)>>);
+
+  using env_all = decltype(bexec::when_all(env_dependent_sender{}));
+  static_assert(
+      std::same_as<
+          bexec::completion_signatures_of_t<env_all>,
+          bexec::completion_signatures<
+              bexec::set_value_t(), bexec::set_error_t(std::exception_ptr)>>);
+  static_assert(
+      std::same_as<bexec::completion_signatures_of_t<env_all, flag_env>,
+                   bexec::completion_signatures<bexec::set_value_t(int),
+                                                bexec::set_error_t(
+                                                    std::exception_ptr)>>);
 
   static_assert(bexec::operation_state<good_operation>);
   static_assert(!bexec::operation_state<throwing_operation>);

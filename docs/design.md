@@ -59,13 +59,19 @@ using completions = bexec::completion_signatures<
 ```
 
 The public helpers `completion_signatures_of_t`, `value_types_of_t`,
-`error_types_of_t`, and `sends_stopped` inspect this signature pack. `then`,
-`upon_error`, and `upon_stopped` transform the selected completion kind into a
-value completion and add `std::exception_ptr` to possible errors. `let_value`,
-`let_error`, and `let_stopped` replace the selected upstream completion
-signatures with the completion signatures of the sender returned by the user
-callable, preserve non-selected completions, and add `std::exception_ptr` for
-callable/connect exceptions.
+`error_types_of_t`, and `sends_stopped` inspect this signature pack. The query
+path is environment-aware: `completion_signatures_of_t<Sender, Env>` calls a
+standard-shaped static `Sender::get_completion_signatures<Sender, Env>()` when
+present, and otherwise falls back to the legacy nested `completion_signatures`
+member. `sender_to<Sender, Receiver>` checks the sender against the receiver's
+environment.
+
+`then`, `upon_error`, and `upon_stopped` transform the selected completion kind
+into a value completion and add `std::exception_ptr` to possible errors.
+`let_value`, `let_error`, and `let_stopped` replace the selected upstream
+completion signatures with the completion signatures of the sender returned by
+the user callable, preserve non-selected completions, and add
+`std::exception_ptr` for callable/connect exceptions.
 
 `into_variant` maps value signatures to one
 `set_value_t(std::variant<std::tuple<...>, ...>)` signature, with duplicate
@@ -280,7 +286,9 @@ lifetime rule that the operation state remains alive until completion.
 
 All child operations are started. On the first error or stopped signal,
 `when_all` records that terminal state and requests stop through the shared stop
-source. Children receive that token through their environment.
+source. A downstream stop request is also registered with the internal stop
+source before children are started, so children receive cancellation through
+their environment even when the final receiver's stop token is requested.
 
 The final receiver is completed only after all started children have finished.
 If the first terminal state was an error, the receiver gets the stored error as
@@ -290,16 +298,23 @@ as `set_value(args...)` in child order.
 
 The internal error storage remains a `std::variant` so the operation can keep
 the first error until all children finish. That variant is not the public error
-completion shape.
+completion shape. The downstream stop callback registration is stored in-place
+through a small erased-lifetime detail utility; the `when_all` operation does
+not allocate for cancellation propagation.
 
 ## Counting Scopes And Spawn
 
 `simple_counting_scope` and `counting_scope` maintain an association count and
 a small state machine. `close()` prevents new associations, and `join()`
-completes only after the scope is closed to new work and the count reaches
-zero. `counting_scope` additionally owns an `inplace_stop_source`; its token
-wraps child senders so scope stop requests are visible through
-`get_stop_token`.
+completes after the count reaches zero. Starting a join does not close the
+scope; associations are still allowed while the scope is open and joining.
+`counting_scope` additionally owns an `inplace_stop_source`; its token wraps
+child senders so scope stop requests are visible through `get_stop_token`.
+
+Scope destruction is intentionally strict. Destroying a scope while it is open,
+closed-but-associated, or waiting for a join completion terminates the program.
+This keeps detached work from outliving the scope object that owns its lifetime
+contract.
 
 `spawn(sender, token, env)` is the detached form. It obtains an association,
 allocates an operation through `get_allocator(env)`, wraps the input sender

@@ -5,9 +5,9 @@ It is intended as a temporary, practical bridge while standardized C++26
 execution support becomes widely available in mainstream stable toolchains.
 
 This is not a full P2300 implementation. The current code is a C++26-aligned
-subset with a member-customization API, P2300-style completion signatures,
-small schedulers, in-place stop tokens, simple environment queries, sender
-factories/adaptors, and focused tests.
+subset with a member-customization API, environment-aware P2300-style
+completion signatures, small schedulers, in-place stop tokens, simple
+environment queries, sender factories/adaptors, and focused tests.
 
 ## What It Is
 
@@ -48,7 +48,7 @@ factories/adaptors, and focused tests.
   `get_delegation_scheduler` tags.
 - `repeat_until` for sequential repetition using a sender factory.
 - `when_all` for structured startup, value aggregation, raw error delivery,
-  and first-terminal stop propagation.
+  first-terminal stop propagation, and downstream cancellation propagation.
 - `when_all_with_variant` for child senders with multiple value alternatives.
 - `starts_on(scheduler, sender)` and `on(scheduler, sender)`.
 - Standard-style `simple_counting_scope`, `counting_scope`, detached `spawn`,

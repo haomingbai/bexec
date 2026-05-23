@@ -69,6 +69,11 @@ class let_sender {
   using completion_signatures =
       detail::let_completion_signatures_t<Tag, Fn, Sender>;
 
+  template <class Self, class Env>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    return detail::let_completion_signatures_for_env_t<Tag, Fn, Sender, Env>{};
+  }
+
   template <class SenderArg, class FnArg>
     requires std::constructible_from<Sender, SenderArg> &&
                  std::constructible_from<Fn, FnArg>

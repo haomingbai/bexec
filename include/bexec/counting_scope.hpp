@@ -199,8 +199,12 @@ class scope_stop_receiver {
 template <class Sender>
 class scope_stop_sender {
  public:
-  using completion_signatures =
-      typename remove_cvref_t<Sender>::completion_signatures;
+  using completion_signatures = bexec::completion_signatures_of_t<Sender>;
+
+  template <class Self, class Env>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    return bexec::completion_signatures_of_t<Sender, Env>{};
+  }
 
   scope_stop_sender(Sender sender, inplace_stop_token scope_token)
       : sender_(std::move(sender)), scope_token_(std::move(scope_token)) {}
@@ -243,9 +247,8 @@ struct spawn_completion_signatures_ok<completion_signatures<Signatures...>>
 
 template <class Sender>
 inline constexpr bool spawnable_sender_v =
-    sender<Sender> &&
-    spawn_completion_signatures_ok<
-        typename remove_cvref_t<Sender>::completion_signatures>::value;
+    sender<Sender> && spawn_completion_signatures_ok<
+                          bexec::completion_signatures_of_t<Sender>>::value;
 
 template <class Token, class Sender>
 auto wrap_scope_sender(const Token& token, Sender&& sender) noexcept(
@@ -525,7 +528,8 @@ class spawn_future_receiver {
 template <class Sender, class Token, class Env, class ByteAllocator>
 class spawn_future_state {
  public:
-  using completions = typename remove_cvref_t<Sender>::completion_signatures;
+  using child_env = env_with_scope_stop_token<const Env&>;
+  using completions = bexec::completion_signatures_of_t<Sender, child_env>;
   using completion_signatures =
       spawn_future_completion_signatures_t<completions>;
   using result_variant = spawn_future_result_variant_t<completions>;
@@ -786,6 +790,7 @@ class simple_counting_scope {
   simple_counting_scope() = default;
   simple_counting_scope(const simple_counting_scope&) = delete;
   simple_counting_scope& operator=(const simple_counting_scope&) = delete;
+  ~simple_counting_scope() noexcept { ensure_destructible(); }
 
   [[nodiscard]] token get_token() noexcept;
   [[nodiscard]] join_sender join() noexcept;
@@ -824,8 +829,24 @@ class simple_counting_scope {
 
   friend class token;
   friend class join_sender;
+  friend class counting_scope;
 
   [[nodiscard]] association try_associate() noexcept;
+
+  void ensure_destructible() noexcept {
+    std::lock_guard lock(mutex_);
+    switch (state_.load(std::memory_order_acquire)) {
+      case state::unused:
+      case state::unused_and_closed:
+      case state::joined:
+        return;
+      case state::open:
+      case state::closed:
+      case state::open_and_joining:
+      case state::closed_and_joining:
+        std::terminate();
+    }
+  }
 
   void disassociate() noexcept {
     detail::scope_join_waiter* completions = nullptr;
@@ -1014,11 +1035,11 @@ simple_counting_scope::try_associate() noexcept {
       compare_exchange_state(state::unused, state::open);
       return association{*this};
     case state::open:
+    case state::open_and_joining:
       increment_count();
       return association{*this};
     case state::closed:
     case state::unused_and_closed:
-    case state::open_and_joining:
     case state::closed_and_joining:
     case state::joined:
       return {};
@@ -1177,12 +1198,13 @@ class counting_scope {
   counting_scope() = default;
   counting_scope(const counting_scope&) = delete;
   counting_scope& operator=(const counting_scope&) = delete;
+  ~counting_scope() noexcept { scope_.ensure_destructible(); }
 
   [[nodiscard]] token get_token() noexcept;
   [[nodiscard]] auto join() noexcept { return scope_.join(); }
 
   void close() noexcept { scope_.close(); }
-  bool request_stop() noexcept { return stop_source_.request_stop(); }
+  void request_stop() noexcept { stop_source_.request_stop(); }
 
  private:
   simple_counting_scope scope_;

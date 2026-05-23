@@ -55,6 +55,13 @@ class when_all_sender {
   static constexpr bool sends_value =
       (detail::sender_has_single_value_completion_v<Senders> && ...);
 
+  template <class Self, class Env>
+  [[nodiscard]] static consteval auto get_completion_signatures() {
+    using child_env = env_with_stop_token<Env>;
+    return detail::when_all_completion_signatures_for_env_t<child_env,
+                                                            Senders...>{};
+  }
+
   explicit when_all_sender(Senders... senders)
       : senders_(std::move(senders)...) {}
 
@@ -62,6 +69,15 @@ class when_all_sender {
   class operation {
    public:
     using sender_tuple = std::tuple<Senders...>;
+    using receiver_env = decltype(bexec::get_env(std::declval<Receiver&>()));
+    using child_env = env_with_stop_token<receiver_env>;
+    using error_variant =
+        detail::when_all_error_variant_for_env_t<child_env, Senders...>;
+    using values_tuple =
+        detail::when_all_values_tuple_for_env_t<child_env, Senders...>;
+    static constexpr bool sends_value =
+        (detail::sender_has_single_value_completion_v<Senders, child_env> &&
+         ...);
     using state_type = detail::when_all_state<Receiver, error_variant,
                                               values_tuple, sends_value>;
     using indices = std::index_sequence_for<Senders...>;
@@ -79,7 +95,11 @@ class when_all_sender {
     operation(operation&&) = delete;
     operation& operator=(operation&&) = delete;
 
-    void start() noexcept { start_all(indices{}); }
+    void start() noexcept {
+      if (state_.register_stop_callback()) {
+        start_all(indices{});
+      }
+    }
 
    private:
     template <std::size_t... Indices>

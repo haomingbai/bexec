@@ -342,10 +342,14 @@ void test_counting_scope() {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(!scope.get_token().try_associate());
+    auto late_association = scope.get_token().try_associate();
+    CHECK(late_association);
     CHECK(state->signal == signal_kind::none);
 
     association = {};
+    CHECK(state->signal == signal_kind::none);
+    CHECK(loop.run_one() == 0);
+    late_association = {};
     CHECK(state->signal == signal_kind::none);
     CHECK(loop.run_one() == 1);
     CHECK(state->signal == signal_kind::value);
@@ -421,7 +425,7 @@ void test_counting_scope() {
   {
     bexec::counting_scope scope;
     stop_observer_state child_state;
-    CHECK(scope.request_stop());
+    scope.request_stop();
 
     bexec::spawn(stop_observing_sender{child_state}, scope.get_token());
     CHECK(!child_state.value);

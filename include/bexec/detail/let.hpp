@@ -36,13 +36,14 @@ namespace bexec::detail {
 template <class Tag, class Sender, class Fn, class Receiver>
 class let_operation;
 
-template <class Operation>
+template <class Operation, class Receiver>
 class let_child_receiver {
  public:
   explicit let_child_receiver(Operation& parent) : parent_(&parent) {}
 
   [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(parent_->receiver()))) {
+      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>())))
+          -> decltype(bexec::get_env(std::declval<Receiver&>())) {
     return bexec::get_env(parent_->receiver());
   }
 
@@ -132,13 +133,14 @@ using let_child_operation_list_t =
     typename let_child_operation_list<Tag, Fn, ChildReceiver,
                                       Completions>::type;
 
-template <class Tag, class Operation>
+template <class Tag, class Operation, class Receiver>
 class let_receiver {
  public:
   explicit let_receiver(Operation& parent) : parent_(&parent) {}
 
   [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(parent_->receiver()))) {
+      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>())))
+          -> decltype(bexec::get_env(std::declval<Receiver&>())) {
     return bexec::get_env(parent_->receiver());
   }
 
@@ -176,10 +178,10 @@ template <class Tag, class Sender, class Fn, class Receiver>
 class let_operation {
  public:
   using operation_type = let_operation;
-  using upstream_receiver_type = let_receiver<Tag, operation_type>;
+  using upstream_receiver_type = let_receiver<Tag, operation_type, Receiver>;
   using upstream_operation_type = decltype(bexec::connect(
       std::declval<Sender>(), std::declval<upstream_receiver_type>()));
-  using child_receiver_type = let_child_receiver<operation_type>;
+  using child_receiver_type = let_child_receiver<operation_type, Receiver>;
   using child_operation_list =
       let_child_operation_list_t<Tag, Fn, child_receiver_type,
                                  sender_completion_signatures_t<Sender>>;

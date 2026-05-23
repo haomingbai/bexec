@@ -13,9 +13,7 @@
 
 namespace {
 
-bexec::task<int> compute_value() {
-  co_return 42;
-}
+bexec::task<int> compute_value() { co_return 42; }
 
 }  // namespace
 

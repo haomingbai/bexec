@@ -19,9 +19,7 @@
 namespace bexec_tests {
 namespace {
 
-bexec::task<int> lazy_value() {
-  co_return 42;
-}
+bexec::task<int> lazy_value() { co_return 42; }
 
 bexec::task<void> lazy_void(bool& ran) {
   ran = true;

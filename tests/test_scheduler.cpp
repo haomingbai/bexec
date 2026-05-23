@@ -1,6 +1,6 @@
 /**
  * @file tests/test_scheduler.cpp
- * @brief Tests io_context scheduling behavior.
+ * @brief Tests scheduler behavior.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
  *
@@ -12,7 +12,6 @@
  * equality, scheduled sender completion, and cancellation-aware scheduling.
  */
 
-#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/on.hpp>
 #include <bexec/operation_state.hpp>
@@ -106,18 +105,18 @@ class sync_choice_sender {
 
 void test_scheduler() {
   {
-    bexec::io_context context;
+    bexec::run_loop loop;
     bool ran = false;
     auto state = std::make_shared<shared_state>();
 
-    auto sender = bexec::schedule(context.get_scheduler()) |
+    auto sender = bexec::schedule(loop.get_scheduler()) |
                   bexec::then([&] { ran = true; });
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
     CHECK(!ran);
     CHECK(state->signal == signal_kind::none);
-    CHECK(context.run() == 1);
+    CHECK(loop.run_one() == 1);
     CHECK(ran);
     CHECK(state->signal == signal_kind::value);
   }

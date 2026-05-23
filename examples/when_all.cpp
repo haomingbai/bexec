@@ -17,8 +17,8 @@
 #include "example_senders.hpp"
 
 int main() {
-  bexec::io_context context;
-  auto scheduler = context.get_scheduler();
+  bexec::run_loop loop;
+  auto scheduler = loop.get_scheduler();
   int completed = 0;
 
   auto first = bexec::schedule(scheduler) | bexec::then([&] {
@@ -35,7 +35,8 @@ int main() {
                      bexec_examples::logging_receiver{"when_all"});
 
   bexec::start(operation);
-  context.run();
+  while (loop.run_one() != 0) {
+  }
 
   std::cout << "when_all completed children: " << completed << '\n';
 

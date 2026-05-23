@@ -9,8 +9,6 @@
   `scheduler.hpp`, and `query.hpp`: role-oriented public vocabulary headers.
 - `include/bexec/cpo.hpp`: aggregate include for CPO entities only; keep
   feature implementations in their role or feature headers.
-- `include/bexec/io_context/`: the FIFO execution context and its related
-  detail helpers.
 - `include/bexec/*.hpp`: other public feature headers.
 - `include/bexec/detail/*.hpp`: implementation helpers that are not part of
   the public API contract.
@@ -160,9 +158,6 @@ The returned sender should complete on the scheduler's execution context.
 Document whether scheduling is FIFO, thread-safe, blocking, inline-capable, or
 best-effort.
 
-Do not use the `io_context` directory as a place for general IO utilities. In
-this project it names the run-loop pattern only.
-
 If the scheduler can observe cancellation, check the receiver environment's
 `get_stop_token` before delivering `set_value()`.
 
@@ -184,8 +179,6 @@ sender/adaptor.
 
 Only documented types are thread-safe:
 
-- `io_context::post`, `io_context::enqueue`, `io_context::stop`, and
-  `io_context::stopped` are mutex-protected.
 - `inplace_stop_source` and callback registration are thread-safe for the
   documented stop-token use cases.
 - Operation states are not generally thread-safe unless a specific operation

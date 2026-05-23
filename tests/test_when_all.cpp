@@ -13,13 +13,14 @@
  */
 
 #include <bexec/env.hpp>
-#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
+#include <bexec/run_loop.hpp>
 #include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/then.hpp>
 #include <bexec/when_all.hpp>
+#include <cstddef>
 #include <exception>
 #include <memory>
 #include <optional>
@@ -359,40 +360,48 @@ void test_when_all() {
   }
 
   {
-    bexec::io_context context;
+    bexec::run_loop loop;
     int count = 0;
 
-    auto first = bexec::schedule(context.get_scheduler()) |
-                 bexec::then([&] { ++count; });
-    auto second = bexec::schedule(context.get_scheduler()) |
-                  bexec::then([&] { ++count; });
+    auto first =
+        bexec::schedule(loop.get_scheduler()) | bexec::then([&] { ++count; });
+    auto second =
+        bexec::schedule(loop.get_scheduler()) | bexec::then([&] { ++count; });
     auto state = std::make_shared<shared_state>();
     auto operation =
         bexec::connect(bexec::when_all(std::move(first), std::move(second)),
                        any_receiver{state});
 
     bexec::start(operation);
-    CHECK(context.run() == 2);
+    std::size_t ran = 0;
+    while (loop.run_one() != 0) {
+      ++ran;
+    }
+    CHECK(ran == 2);
     CHECK(count == 2);
     CHECK(state->signal == signal_kind::value);
   }
 
   {
-    bexec::io_context context;
+    bexec::run_loop loop;
     bexec::inplace_stop_source source;
 
     stop_token_receiver receiver{source.get_token()};
     auto state = receiver.state;
 
-    auto operation = bexec::connect(
-        bexec::when_all(bexec::schedule(context.get_scheduler()),
-                        bexec::schedule(context.get_scheduler())),
-        std::move(receiver));
+    auto operation =
+        bexec::connect(bexec::when_all(bexec::schedule(loop.get_scheduler()),
+                                       bexec::schedule(loop.get_scheduler())),
+                       std::move(receiver));
 
     bexec::start(operation);
     source.request_stop();
 
-    CHECK(context.run() == 2);
+    std::size_t ran = 0;
+    while (loop.run_one() != 0) {
+      ++ran;
+    }
+    CHECK(ran == 2);
     CHECK(state->signal == signal_kind::stopped);
   }
 

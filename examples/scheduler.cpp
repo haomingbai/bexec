@@ -1,6 +1,6 @@
 /**
  * @file examples/scheduler.cpp
- * @brief Demonstrates io_context scheduling with sender pipelines.
+ * @brief Demonstrates run_loop scheduling with sender pipelines.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-15
  *
@@ -9,14 +9,15 @@
  */
 
 #include <bexec/bexec.hpp>
+#include <cstddef>
 #include <iostream>
 #include <utility>
 
 #include "example_receiver.hpp"
 
 int main() {
-  bexec::io_context context;
-  auto scheduler = context.get_scheduler();
+  bexec::run_loop loop;
+  auto scheduler = loop.get_scheduler();
 
   auto first = bexec::schedule(scheduler) | bexec::then([] {
                  std::cout << "scheduled work: first\n";
@@ -35,6 +36,9 @@ int main() {
   bexec::start(first_operation);
   bexec::start(second_operation);
 
-  auto ran = context.run();
-  std::cout << "io_context ran " << ran << " queued item(s)\n";
+  std::size_t ran = 0;
+  while (loop.run_one() != 0) {
+    ++ran;
+  }
+  std::cout << "run_loop ran " << ran << " queued item(s)\n";
 }

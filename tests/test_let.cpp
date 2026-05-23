@@ -13,11 +13,11 @@
  * support for non-movable operation states.
  */
 
-#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/let.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/receiver.hpp>
+#include <bexec/run_loop.hpp>
 #include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/then.hpp>
@@ -213,17 +213,17 @@ void test_let() {
   }
 
   {
-    bexec::io_context context;
+    bexec::run_loop loop;
     auto state = std::make_shared<shared_state>();
     auto sender = bexec::just(4) | bexec::let_value([&](int value) {
-                    return bexec::schedule(context.get_scheduler()) |
+                    return bexec::schedule(loop.get_scheduler()) |
                            bexec::then([value] { return value + 6; });
                   });
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
     CHECK(state->signal == signal_kind::none);
-    CHECK(context.run() == 1);
+    CHECK(loop.run_one() == 1);
     CHECK(state->signal == signal_kind::value);
     CHECK(state->int_value == 10);
   }

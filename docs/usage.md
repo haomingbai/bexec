@@ -84,28 +84,6 @@ Non-selected completions are forwarded unchanged.
 
 ## Scheduler
 
-`io_context` is a small FIFO execution context. Despite the name, it does not
-perform file, socket, or OS IO. Its scheduler produces senders through
-`schedule(scheduler)`.
-
-```cpp
-#include <bexec/io_context/io_context.hpp>
-
-bexec::io_context context;
-auto sched = context.get_scheduler();
-
-auto s = bexec::schedule(sched) | bexec::then([] {
-    // Runs on the thread that calls context.run().
-});
-
-auto op = bexec::connect(std::move(s), receiver{});
-bexec::start(op);
-context.run();
-```
-
-`post` and `enqueue` are thread-safe. `run()` drains queued work until the queue
-is empty or `stop()` is requested. It is not a work-guarded blocking loop.
-
 `run_loop` is a stack-owned FIFO scheduler whose queue stores operation
 pointers intrusively. It is useful for local tests, hand-written blocking
 waits, and `this_thread::sync_wait`.
@@ -209,17 +187,16 @@ not recursively call `start()` and do not grow the stack per iteration.
 children have completed.
 
 ```cpp
-#include <bexec/io_context/io_context.hpp>
-
-bexec::io_context context;
-auto sched = context.get_scheduler();
+bexec::run_loop loop;
+auto sched = loop.get_scheduler();
 
 auto a = bexec::schedule(sched) | bexec::then([] {});
 auto b = bexec::schedule(sched) | bexec::then([] {});
 
 auto op = bexec::connect(bexec::when_all(std::move(a), std::move(b)), receiver{});
 bexec::start(op);
-context.run();
+while (loop.run_one() != 0) {
+}
 ```
 
 All-success completion sends the concatenated child values in argument order:

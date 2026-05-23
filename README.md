@@ -36,9 +36,6 @@ environment queries, sender factories/adaptors, and focused tests.
   - `let_stopped`
   - `into_variant`
   - pipe syntax: `sender | then(fn)`
-- A simple `io_context` scheduler. Despite the name, it does not implement
-  file, socket, or OS IO; it is a FIFO execution context using the familiar
-  run-loop pattern.
 - A stack-owned `run_loop` scheduler for `this_thread::sync_wait`, tests, and
   small local scheduling scenarios.
 - Minimal `inplace_stop_source`, `inplace_stop_token`, and
@@ -120,16 +117,16 @@ if (result) {
 ```
 
 ```cpp
-bexec::io_context context;
-auto sched = context.get_scheduler();
+bexec::run_loop loop;
+auto sched = loop.get_scheduler();
 
 auto s = bexec::schedule(sched) | bexec::then([] {
-    // Runs when context.run() executes queued work.
+    // Runs when loop.run_one() executes queued work.
 });
 
 auto op = bexec::connect(std::move(s), receiver{});
 bexec::start(op);
-context.run();
+loop.run_one();
 ```
 
 ## Current Limitations
@@ -153,9 +150,6 @@ context.run();
   the stored result. Destroying that returned sender before the child completes
   requests stop for the child. Join receivers must expose `get_scheduler`
   through their environment.
-- Demo-only `io_context::post(std::function<void()>)` may allocate. The
-  library operation states added for scheduling and waiting use in-place
-  operation storage.
 - If exceptions are disabled, `then` cannot translate thrown exceptions to
   `std::exception_ptr`; the same limitation applies to other adaptors that
   report callable/connect failures as `std::exception_ptr`.

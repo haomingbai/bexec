@@ -165,32 +165,6 @@ path.
 `run_loop` and a receiver environment that answers both `get_scheduler` and
 `get_delegation_scheduler` with that loop's scheduler.
 
-## io_context Model
-
-`io_context` is a mutex-protected FIFO execution context. The name follows a
-common scheduler/run-loop pattern; this type does not provide file, socket, or
-OS IO operations.
-
-`io_context` owns a FIFO queue of `std::function<void()>`.
-`post` and `enqueue` are thread-safe and return `false` if the context is
-stopped.
-
-`run_one()` executes one queued item if available. `run()` repeatedly calls
-`run_one()` until the queue is empty or the context is stopped. This is simpler
-than `asio::io_context`: there is no work guard and `run()` does not block
-waiting for future work after the queue becomes empty.
-
-`schedule(scheduler)` returns a sender that posts receiver completion to the
-context. If the receiver's stop token is already requested, it completes with
-`set_stopped()` without posting. The posted handler checks the stop token again
-before delivering `set_value()`. The posted handler captures a pointer to the
-operation state; the receiver remains stored in that operation state until
-completion.
-
-`io_context::post(std::function<void()>)` is a demonstration API and may
-allocate. The newer operation-state algorithms avoid adding heap ownership of
-their own.
-
 ## Scheduling Adaptors And sync_wait
 
 `starts_on(scheduler, sender)` first starts `schedule(scheduler)`. When that

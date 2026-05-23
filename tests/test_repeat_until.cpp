@@ -12,13 +12,14 @@
  * cancellation checks, and scheduler-based asynchronous repetition.
  */
 
-#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/repeat_until.hpp>
+#include <bexec/run_loop.hpp>
 #include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/then.hpp>
+#include <cstddef>
 #include <memory>
 #include <string>
 #include <utility>
@@ -57,11 +58,11 @@ void test_repeat_until() {
   }
 
   {
-    bexec::io_context context;
+    bexec::run_loop loop;
     int count = 0;
     auto sender = bexec::repeat_until(
         [&] {
-          return bexec::schedule(context.get_scheduler()) |
+          return bexec::schedule(loop.get_scheduler()) |
                  bexec::then([&] { ++count; });
         },
         [&] { return count == 5; });
@@ -70,7 +71,11 @@ void test_repeat_until() {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(context.run() == 5);
+    std::size_t ran = 0;
+    while (loop.run_one() != 0) {
+      ++ran;
+    }
+    CHECK(ran == 5);
     CHECK(count == 5);
     CHECK(state->signal == signal_kind::value);
   }

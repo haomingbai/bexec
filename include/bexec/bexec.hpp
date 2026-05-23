@@ -9,7 +9,7 @@
  *
  * @details
  * Includes the public vocabulary, factories, adaptors, algorithms, stop-token
- * utilities, coroutine task, and io_context scheduler headers.
+ * utilities, coroutine task, and run_loop scheduler headers.
  */
 
 #pragma once
@@ -23,7 +23,6 @@
 #include <bexec/cpo.hpp>
 #include <bexec/env.hpp>
 #include <bexec/into_variant.hpp>
-#include <bexec/io_context/io_context.hpp>
 #include <bexec/just.hpp>
 #include <bexec/let.hpp>
 #include <bexec/on.hpp>

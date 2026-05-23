@@ -55,17 +55,17 @@ int main() {
 
   bexec_examples::run_sender("split via let_value", std::move(value_fanout));
 
-  bexec::io_context context;
+  bexec::run_loop loop;
   int async_source_runs = 0;
 
   auto split_like_async =
-      bexec::schedule(context.get_scheduler()) | bexec::then([&] {
+      bexec::schedule(loop.get_scheduler()) | bexec::then([&] {
         ++async_source_runs;
         std::cout << "split async source ran " << async_source_runs
                   << " time(s)\n";
         return value_type{21, "expensive result"};
       }) |
-      bexec::let_value([scheduler = context.get_scheduler()](value_type value) {
+      bexec::let_value([scheduler = loop.get_scheduler()](value_type value) {
         auto shared = std::make_shared<value_type>(std::move(value));
         auto read_plus_one =
             bexec::schedule(scheduler) |
@@ -92,7 +92,8 @@ int main() {
                      bexec_examples::logging_receiver{"split-like async"});
 
   bexec::start(async_operation);
-  context.run();
+  while (loop.run_one() != 0) {
+  }
 
   auto error_fanout =
       bexec::just_error(std::string{"timeout"}) |

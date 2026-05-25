@@ -125,6 +125,53 @@ struct stop_token_receiver {
   }
 };
 
+struct large_stop_token {
+  template <class Callback>
+  class callback_type {
+   public:
+    callback_type(const large_stop_token&, Callback callback) noexcept
+        : callback_(std::move(callback)) {}
+
+    callback_type(const callback_type&) = delete;
+    callback_type& operator=(const callback_type&) = delete;
+    callback_type(callback_type&&) = delete;
+    callback_type& operator=(callback_type&&) = delete;
+
+   private:
+    Callback callback_;
+    std::byte padding_[320]{};
+  };
+
+  [[nodiscard]] bool stop_requested() const noexcept { return false; }
+};
+
+struct large_stop_env {
+  [[nodiscard]] large_stop_token query(bexec::get_stop_token_t) const noexcept {
+    return {};
+  }
+};
+
+struct large_stop_receiver {
+  std::shared_ptr<shared_state> state = std::make_shared<shared_state>();
+
+  void set_value() noexcept { state->signal = signal_kind::value; }
+
+  template <class Error>
+  void set_error(Error&&) noexcept {
+    state->signal = signal_kind::error;
+  }
+
+  void set_stopped() noexcept { state->signal = signal_kind::stopped; }
+
+  [[nodiscard]] large_stop_env get_env() const noexcept { return {}; }
+};
+
+struct noop_callback {
+  void operator()() const noexcept {}
+};
+
+static_assert(sizeof(large_stop_token::callback_type<noop_callback>) > 256U);
+
 class non_movable_value_sender {
  public:
   using completion_signatures =
@@ -403,6 +450,16 @@ void test_when_all() {
     }
     CHECK(ran == 2);
     CHECK(state->signal == signal_kind::stopped);
+  }
+
+  {
+    large_stop_receiver receiver;
+    auto state = receiver.state;
+    auto operation =
+        bexec::connect(bexec::when_all(bexec::just()), std::move(receiver));
+
+    bexec::start(operation);
+    CHECK(state->signal == signal_kind::value);
   }
 
   {

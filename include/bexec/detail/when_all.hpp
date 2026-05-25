@@ -14,7 +14,6 @@
 #define BEXEC_INCLUDE_BEXEC_DETAIL_WHEN_ALL_HPP_
 
 #include <bexec/detail/config.hpp>
-#include <bexec/detail/erased_lifetime.hpp>
 #include <bexec/detail/manual_lifetime.hpp>
 #include <bexec/detail/type_traits.hpp>
 #include <bexec/env.hpp>
@@ -123,6 +122,11 @@ struct when_all_state {
     void operator()() const noexcept { source->request_stop(); }
   };
 
+  using stop_token_type = remove_cvref_t<decltype(bexec::get_stop_token(
+      bexec::get_env(std::declval<Receiver&>())))>;
+  using on_stop_callback_type =
+      typename stop_token_type::template callback_type<on_stop_request>;
+
   explicit when_all_state(Receiver recv, std::size_t count)
       : receiver(std::move(recv)), remaining(count) {}
 
@@ -131,13 +135,8 @@ struct when_all_state {
     try {
 #endif
       auto token = bexec::get_stop_token(bexec::get_env(receiver));
-      using token_type = decltype(token);
-      if constexpr (!std::is_same_v<remove_cvref_t<token_type>,
-                                    bexec::never_stop_token>) {
-        using callback_type = typename remove_cvref_t<
-            token_type>::template callback_type<on_stop_request>;
-        on_stop.template emplace<callback_type>(std::move(token),
-                                                on_stop_request{&stop_source});
+      if constexpr (!std::is_same_v<stop_token_type, bexec::never_stop_token>) {
+        on_stop.emplace(std::move(token), on_stop_request{&stop_source});
       }
       return true;
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
@@ -320,7 +319,7 @@ struct when_all_state {
   std::size_t remaining;
   std::mutex mutex;
   inplace_stop_source stop_source;
-  erased_lifetime<256> on_stop;
+  manual_lifetime<on_stop_callback_type> on_stop;
   terminal_kind terminal{terminal_kind::none};
   std::optional<ErrorVariant> error;
   ValuesTuple values;

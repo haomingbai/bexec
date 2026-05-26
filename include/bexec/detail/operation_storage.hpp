@@ -13,24 +13,11 @@
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_STORAGE_HPP_
 #define BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_STORAGE_HPP_
 
-#include <bexec/completion_signatures.hpp>
+#include <bexec/detail/manual_variant.hpp>
 #include <bexec/operation_state.hpp>
-#include <cstddef>
-#include <new>
-#include <type_traits>
 #include <utility>
 
 namespace bexec::detail {
-
-template <std::size_t First, std::size_t... Rest>
-struct static_max
-    : std::integral_constant<std::size_t, ((First > static_max<Rest...>::value)
-                                               ? First
-                                               : static_max<Rest...>::value)> {
-};
-
-template <std::size_t Value>
-struct static_max<Value> : std::integral_constant<std::size_t, Value> {};
 
 template <class Operations>
 class operation_storage;
@@ -38,6 +25,8 @@ class operation_storage;
 template <class... Operations>
 class operation_storage<type_list<Operations...>> {
  public:
+  using storage_type = manual_variant<type_list<Operations...>>;
+
   operation_storage() noexcept = default;
 
   operation_storage(const operation_storage&) = delete;
@@ -53,44 +42,27 @@ class operation_storage<type_list<Operations...>> {
                   "operation type is not listed in this operation_storage");
 
     reset();
-    Operation* operation = ::new (static_cast<void*>(storage_))
-        Operation(std::forward<Factory>(factory)());
-    destroy_ = &destroy_model<Operation>;
+    Operation& operation = storage_.template emplace_from<Operation>(
+        std::forward<Factory>(factory));
     start_ = &start_model<Operation>;
-    return *operation;
+    return operation;
   }
 
   void reset() noexcept {
-    if (destroy_ == nullptr) {
-      return;
-    }
-
-    destroy_(static_cast<void*>(storage_));
-    destroy_ = nullptr;
+    storage_.reset();
     start_ = nullptr;
   }
 
-  void start() noexcept { start_(static_cast<void*>(storage_)); }
+  void start() noexcept { start_(storage_); }
 
  private:
   template <class Operation>
-  static void destroy_model(void* storage) noexcept {
-    std::launder(reinterpret_cast<Operation*>(storage))->~Operation();
+  static void start_model(storage_type& storage) noexcept {
+    bexec::start(storage.template get<Operation>());
   }
 
-  template <class Operation>
-  static void start_model(void* storage) noexcept {
-    bexec::start(*std::launder(reinterpret_cast<Operation*>(storage)));
-  }
-
-  static constexpr std::size_t storage_size =
-      static_max<1U, sizeof(Operations)...>::value;
-  static constexpr std::size_t storage_align =
-      static_max<1U, alignof(Operations)...>::value;
-
-  alignas(storage_align) unsigned char storage_[storage_size];
-  void (*destroy_)(void*) noexcept {nullptr};
-  void (*start_)(void*) noexcept {nullptr};
+  storage_type storage_;
+  void (*start_)(storage_type&) noexcept {nullptr};
 };
 
 }  // namespace bexec::detail

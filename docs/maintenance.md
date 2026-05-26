@@ -125,6 +125,11 @@ optional storage for child operation states. Unlike `std::optional`,
 from a factory result, which avoids reintroducing hidden move-construction
 requirements.
 
+Use `include/bexec/detail/manual_variant.hpp` for the same direct construction
+pattern when exactly one alternative from a static `type_list` is active. Keep
+algorithm-specific behavior, such as starting an operation state, layered on top
+of that storage rather than inside it.
+
 ## Adding An Adaptor
 
 Adaptor senders should wrap an upstream sender and connect it to an internal

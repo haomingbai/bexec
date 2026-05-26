@@ -273,8 +273,8 @@ as `set_value(args...)` in child order.
 The internal error storage remains a `std::variant` so the operation can keep
 the first error until all children finish. That variant is not the public error
 completion shape. The downstream stop callback registration is stored in-place
-through a small erased-lifetime detail utility; the `when_all` operation does
-not allocate for cancellation propagation.
+with its concrete callback type; the `when_all` operation does not allocate for
+cancellation propagation.
 
 ## Counting Scopes And Spawn
 

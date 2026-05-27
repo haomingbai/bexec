@@ -131,6 +131,10 @@ source.request_stop();
 Callbacks fire once. If stop has already been requested, registration invokes
 the callback immediately.
 
+`inplace_stop_source` owns the stop state. Tokens and callback registrations do
+not keep that state alive, so destroy associated `inplace_stop_callback` objects
+and stop using associated tokens before the source is destroyed.
+
 ## Environment Queries
 
 The query model is member-based:

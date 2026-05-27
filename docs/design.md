@@ -139,6 +139,13 @@ a small callback-based stop mechanism. Callback records are stored intrusively
 inside `inplace_stop_callback`; registration does not allocate and the source
 owns only a linked list head plus synchronization state.
 
+The model follows the C++26 `std::inplace_stop_*` lifetime rule:
+`inplace_stop_source` is the only owner of the stop state. Associated
+`inplace_stop_token` and `inplace_stop_callback` objects do not extend that
+state's lifetime, so all uses of those associated objects, including callback
+deregistration during `inplace_stop_callback` destruction, must occur before
+the associated `inplace_stop_source` is destroyed.
+
 Threading guarantees:
 
 - `request_stop()` is thread-safe.

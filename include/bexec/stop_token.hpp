@@ -19,10 +19,12 @@
 #ifndef BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_
 #define BEXEC_INCLUDE_BEXEC_STOP_TOKEN_HPP_
 
+#include <atomic>
 #include <bexec/detail/type_traits.hpp>
 #include <concepts>
 #include <exception>
 #include <mutex>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -50,17 +52,20 @@ struct stop_state;
 struct stop_callback_record {
   stop_callback_record* next{nullptr};
   stop_callback_record* prev{nullptr};
-  stop_state* state{nullptr};
+  std::atomic<stop_state*> state{nullptr};
+  std::atomic_bool executing{false};
+  bool* destroyed{nullptr};
   void (*invoke)(stop_callback_record*) noexcept {nullptr};
 };
 
 struct stop_state {
   mutable std::mutex mutex;
   bool requested{false};
+  std::thread::id requester_thread{};
   stop_callback_record* head{nullptr};
 
   void push(stop_callback_record& record) noexcept {
-    record.state = this;
+    record.state.store(this, std::memory_order_release);
     record.prev = nullptr;
     record.next = head;
     if (head != nullptr) {
@@ -82,7 +87,7 @@ struct stop_state {
 
     record.next = nullptr;
     record.prev = nullptr;
-    record.state = nullptr;
+    record.state.store(nullptr, std::memory_order_release);
   }
 };
 
@@ -96,6 +101,7 @@ class inplace_stop_token;
  *
  * Destroying the registration prevents future invocation if cancellation has
  * not already reached the callback. Callback invocation is one-shot.
+ * The associated inplace_stop_source must outlive this registration.
  */
 template <class Callback>
 class inplace_stop_callback {
@@ -111,22 +117,57 @@ class inplace_stop_callback {
   ~inplace_stop_callback() { unregister(); }
 
  private:
-  void unregister() noexcept {
-    auto* state = record_.state;
-    if (state == nullptr) {
-      return;
-    }
+  struct owned_record : detail::stop_callback_record {
+    void* owner{nullptr};
+  };
 
-    std::lock_guard lock(state->mutex);
-    if (record_.state != nullptr) {
-      record_.state->unlink(record_);
+  void unregister() noexcept {
+    auto* state = state_;
+    if (state != nullptr) {
+      std::unique_lock lock(state->mutex);
+      if (record_.state.load(std::memory_order_relaxed) != nullptr) {
+        state->unlink(record_);
+        state_ = nullptr;
+        return;
+      }
+
+      if (record_.executing.load(std::memory_order_acquire)) {
+        if (state->requester_thread == std::this_thread::get_id()) {
+          if (record_.destroyed != nullptr) {
+            *record_.destroyed = true;
+          }
+          state_ = nullptr;
+          return;
+        }
+        lock.unlock();
+        while (record_.executing.load(std::memory_order_acquire)) {
+          record_.executing.wait(true, std::memory_order_acquire);
+        }
+        state_ = nullptr;
+        return;
+      }
+
+      state_ = nullptr;
     }
   }
 
+  void invoke() noexcept {
+    try {
+      callback_();
+    } catch (...) {
+      std::terminate();
+    }
+  }
+
+  static void invoke_record(detail::stop_callback_record* record) noexcept {
+    auto* owned = static_cast<owned_record*>(record);
+    auto* self = static_cast<inplace_stop_callback*>(owned->owner);
+    self->invoke();
+  }
+
   std::decay_t<Callback> callback_;
-  struct owned_record : detail::stop_callback_record {
-    void* owner{nullptr};
-  } record_;
+  owned_record record_;
+  detail::stop_state* state_{nullptr};
 };
 
 /**
@@ -164,6 +205,8 @@ class inplace_stop_token {
  *
  * request_stop() is thread-safe. Registered callbacks either run when stop is
  * requested or, if stop was already requested, during registration.
+ * Associated tokens and callbacks must not be used after this source is
+ * destroyed.
  */
 class inplace_stop_source {
  public:
@@ -204,14 +247,23 @@ class inplace_stop_source {
       return false;
     }
     state_.requested = true;
+    state_.requester_thread = std::this_thread::get_id();
 
     while (state_.head != nullptr) {
       detail::stop_callback_record* record = state_.head;
+      bool destroyed = false;
+      record->destroyed = &destroyed;
+      record->executing.store(true, std::memory_order_release);
       state_.unlink(*record);
       auto* invoke = record->invoke;
       lock.unlock();
       invoke(record);
       lock.lock();
+      if (!destroyed) {
+        record->destroyed = nullptr;
+        record->executing.store(false, std::memory_order_release);
+        record->executing.notify_all();
+      }
     }
     return true;
   }
@@ -225,15 +277,7 @@ inplace_stop_callback<Callback>::inplace_stop_callback(
     const inplace_stop_token& token, Callback callback)
     : callback_(std::move(callback)) {
   record_.owner = this;
-  record_.invoke = [](detail::stop_callback_record* record) noexcept {
-    auto* owned = static_cast<owned_record*>(record);
-    auto* self = static_cast<inplace_stop_callback*>(owned->owner);
-    try {
-      self->callback_();
-    } catch (...) {
-      std::terminate();
-    }
-  };
+  record_.invoke = &inplace_stop_callback::invoke_record;
 
   detail::stop_state* state = token.state_;
   if (state == nullptr) {
@@ -247,6 +291,7 @@ inplace_stop_callback<Callback>::inplace_stop_callback(
       fire_now = true;
     } else {
       state->push(record_);
+      state_ = state;
     }
   }
 

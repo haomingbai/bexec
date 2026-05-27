@@ -17,7 +17,6 @@
 - `tests/test_*.cpp`: one feature module per test file.
 - `examples/`: one compiled example case per feature area.
 - `docs/`: usage, design, maintenance, and roadmap documentation.
-- `PROGRESS.md`: checkpoint log with commands run and known limitations.
 
 The library is currently header-only. Add `src/` only when there is a concrete
 need for separately compiled implementation. Keep implementation-only helper
@@ -208,6 +207,3 @@ cmake -S . -B build
 cmake --build build
 ctest --test-dir build --output-on-failure
 ```
-
-Update `PROGRESS.md` with the checkpoint, files changed, tests run, and known
-limitations.

@@ -23,3 +23,5 @@ Testing/
 *.dylib
 *.dll
 *.exe
+*.swp
+.tmp/

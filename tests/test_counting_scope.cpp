@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <bexec/completion_signatures.hpp>
 #include <bexec/counting_scope.hpp>
 #include <bexec/just.hpp>
 #include <bexec/operation_state.hpp>

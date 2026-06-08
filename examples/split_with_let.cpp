@@ -92,8 +92,8 @@ int main() {
                      bexec_examples::logging_receiver{"split-like async"});
 
   bexec::start(async_operation);
-  while (loop.run_one() != 0) {
-  }
+  loop.finish();
+  loop.run();
 
   auto error_fanout =
       bexec::just_error(std::string{"timeout"}) |

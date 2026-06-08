@@ -121,12 +121,13 @@ bexec::run_loop loop;
 auto sched = loop.get_scheduler();
 
 auto s = bexec::schedule(sched) | bexec::then([] {
-    // Runs when loop.run_one() executes queued work.
+    // Runs when loop.run() drains queued work.
 });
 
 auto op = bexec::connect(std::move(s), receiver{});
 bexec::start(op);
-loop.run_one();
+loop.finish();
+loop.run();
 ```
 
 ## Current Limitations

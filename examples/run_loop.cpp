@@ -27,7 +27,8 @@ int main() {
                                   bexec_examples::logging_receiver{"run_loop"});
 
   bexec::start(operation);
-  std::cout << "run_loop before run_one\n";
-  auto ran = loop.run_one();
-  std::cout << "run_loop ran " << ran << " item(s)\n";
+  std::cout << "run_loop before run\n";
+  loop.finish();
+  loop.run();
+  std::cout << "run_loop drained queued work\n";
 }

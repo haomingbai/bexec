@@ -18,12 +18,19 @@
 #include <bexec/receiver.hpp>
 #include <bexec/scheduler.hpp>
 #include <condition_variable>
+#include <exception>
 #include <mutex>
 #include <utility>
 
 namespace bexec {
 
 namespace detail {
+struct run_loop_operation_base {
+  run_loop_operation_base* next{nullptr};
+  virtual ~run_loop_operation_base() = default;
+  virtual void execute() noexcept = 0;
+};
+
 class run_loop_schedule_sender;
 }
 
@@ -34,45 +41,28 @@ class run_loop {
  public:
   class scheduler;
 
-  struct operation_base {
-    operation_base* next{nullptr};
-    virtual ~operation_base() = default;
-    virtual void execute() noexcept = 0;
-  };
-
-  run_loop() = default;
+  run_loop() noexcept = default;
   run_loop(const run_loop&) = delete;
   run_loop& operator=(const run_loop&) = delete;
+  ~run_loop() noexcept {
+    std::lock_guard lock(mutex_);
+    if (head_ != nullptr || running_) {
+      std::terminate();
+    }
+  }
 
   [[nodiscard]] scheduler get_scheduler() noexcept;
 
-  /** @brief Runs queued work until finish() is called and the queue is empty.
-   */
-  void run() {
+  /** @brief Runs queued work until finish() is called and the queue is empty. */
+  void run() noexcept {
+    start_running();
     for (;;) {
-      operation_base* operation = pop_blocking();
+      detail::run_loop_operation_base* operation = pop_blocking();
       if (operation == nullptr) {
         return;
       }
       operation->execute();
     }
-  }
-
-  /** @brief Runs one queued item if available. */
-  std::size_t run_one() {
-    operation_base* operation = pop_nonblocking();
-    if (operation == nullptr) {
-      return 0;
-    }
-
-    operation->execute();
-    return 1;
-  }
-
-  /** @brief Allows a later run() to block again after a previous finish(). */
-  void reset() noexcept {
-    std::lock_guard lock(mutex_);
-    finishing_ = false;
   }
 
   /** @brief Requests that run() return after already queued work is drained. */
@@ -87,7 +77,7 @@ class run_loop {
  private:
   friend class detail::run_loop_schedule_sender;
 
-  void enqueue(operation_base& operation) noexcept {
+  void enqueue(detail::run_loop_operation_base& operation) noexcept {
     {
       std::lock_guard lock(mutex_);
       operation.next = nullptr;
@@ -101,22 +91,18 @@ class run_loop {
     cv_.notify_one();
   }
 
-  operation_base* pop_nonblocking() noexcept {
-    std::lock_guard lock(mutex_);
-    return pop_locked();
-  }
-
-  operation_base* pop_blocking() noexcept {
+  detail::run_loop_operation_base* pop_blocking() noexcept {
     std::unique_lock lock(mutex_);
     cv_.wait(lock, [this] { return head_ != nullptr || finishing_; });
     if (head_ == nullptr) {
+      running_ = false;
       return nullptr;
     }
     return pop_locked();
   }
 
-  operation_base* pop_locked() noexcept {
-    operation_base* operation = head_;
+  detail::run_loop_operation_base* pop_locked() noexcept {
+    detail::run_loop_operation_base* operation = head_;
     if (operation == nullptr) {
       return nullptr;
     }
@@ -129,11 +115,20 @@ class run_loop {
     return operation;
   }
 
+  void start_running() noexcept {
+    std::lock_guard lock(mutex_);
+    if (running_) {
+      std::terminate();
+    }
+    running_ = true;
+  }
+
   std::mutex mutex_;
   std::condition_variable cv_;
-  operation_base* head_{nullptr};
-  operation_base* tail_{nullptr};
+  detail::run_loop_operation_base* head_{nullptr};
+  detail::run_loop_operation_base* tail_{nullptr};
   bool finishing_{false};
+  bool running_{false};
 };
 
 /**
@@ -171,7 +166,7 @@ class run_loop_schedule_sender {
   explicit run_loop_schedule_sender(run_loop& loop) : loop_(&loop) {}
 
   template <class Receiver>
-  class operation : public run_loop::operation_base {
+  class operation : public run_loop_operation_base {
    public:
     operation(run_loop& loop, Receiver receiver)
         : loop_(&loop), receiver_(std::move(receiver)) {}

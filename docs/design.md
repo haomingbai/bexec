@@ -168,9 +168,8 @@ loop queue; no `std::function` or heap allocation is needed for the scheduling
 path.
 
 `run()` blocks until `finish()` is requested and queued work has drained.
-`run_one()` executes one queued item if available. `sync_wait` uses a local
-`run_loop` and a receiver environment that answers both `get_scheduler` and
-`get_delegation_scheduler` with that loop's scheduler.
+`sync_wait` uses a local `run_loop` and a receiver environment that answers both
+`get_scheduler` and `get_delegation_scheduler` with that loop's scheduler.
 
 ## Scheduling Adaptors And sync_wait
 

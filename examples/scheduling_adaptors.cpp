@@ -58,16 +58,20 @@ class scheduled_logging_receiver {
 }  // namespace
 
 int main() {
+  {
+    bexec::run_loop target;
+    auto starts_operation =
+        bexec::connect(bexec::starts_on(target.get_scheduler(), bexec::just(3)),
+                       bexec_examples::logging_receiver{"starts_on"});
+
+    bexec::start(starts_operation);
+    target.finish();
+    target.run();
+    std::cout << "target drained starts_on work\n";
+  }
+
   bexec::run_loop target;
   bexec::run_loop caller;
-
-  auto starts_operation =
-      bexec::connect(bexec::starts_on(target.get_scheduler(), bexec::just(3)),
-                     bexec_examples::logging_receiver{"starts_on"});
-
-  bexec::start(starts_operation);
-  auto starts_items = target.run_one();
-  std::cout << "target ran " << starts_items << " starts_on item(s)\n";
 
   auto sender = bexec::on(target.get_scheduler(),
                           bexec::just(4) | bexec::then([](int value) {
@@ -80,8 +84,10 @@ int main() {
       scheduled_logging_receiver{"on final", caller.get_scheduler()});
 
   bexec::start(operation);
-  auto target_items = target.run_one();
-  std::cout << "target ran " << target_items << " on item(s)\n";
-  auto caller_items = caller.run_one();
-  std::cout << "caller ran " << caller_items << " final item(s)\n";
+  target.finish();
+  target.run();
+  std::cout << "target drained on child work\n";
+  caller.finish();
+  caller.run();
+  std::cout << "caller drained final work\n";
 }

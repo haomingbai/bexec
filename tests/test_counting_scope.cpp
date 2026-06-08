@@ -326,7 +326,6 @@ void test_counting_scope() {
 
     bexec::start(operation);
     CHECK(state->signal == signal_kind::value);
-    CHECK(loop.run_one() == 0);
     CHECK(!scope.get_token().try_associate());
   }
 
@@ -349,10 +348,10 @@ void test_counting_scope() {
 
     association = {};
     CHECK(state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 0);
     late_association = {};
     CHECK(state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(state->signal == signal_kind::value);
     CHECK(!scope.get_token().try_associate());
   }
@@ -379,11 +378,10 @@ void test_counting_scope() {
     bexec::start(first);
     bexec::start(second);
     first_association = {};
-    CHECK(loop.run_one() == 0);
     second_association = {};
 
-    CHECK(loop.run_one() == 1);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(first_state->signal == signal_kind::value);
     CHECK(second_state->signal == signal_kind::value);
   }
@@ -401,7 +399,6 @@ void test_counting_scope() {
 
     bexec::start(operation);
     CHECK(state->signal == signal_kind::value);
-    CHECK(loop.run_one() == 0);
   }
 
   {
@@ -460,7 +457,8 @@ void test_counting_scope() {
     child_state.complete(child_state.operation);
     CHECK(child_state.destroyed);
     CHECK(state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(state->signal == signal_kind::value);
   }
 
@@ -561,7 +559,6 @@ void test_counting_scope() {
     child_state.complete(child_state.operation);
     CHECK(!child_state.destroyed);
     CHECK(join_state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 0);
 
     {
       future_receiver receiver;
@@ -574,7 +571,8 @@ void test_counting_scope() {
     }
 
     CHECK(child_state.destroyed);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(join_state->signal == signal_kind::value);
   }
 

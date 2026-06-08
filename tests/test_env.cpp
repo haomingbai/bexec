@@ -102,7 +102,8 @@ void test_env() {
   bexec::start(operation);
 
   CHECK(state->signal == signal_kind::none);
-  CHECK(loop.run_one() == 1);
+  loop.finish();
+  loop.run();
   CHECK(state->signal == signal_kind::stopped);
 }
 

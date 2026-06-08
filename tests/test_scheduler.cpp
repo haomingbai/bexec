@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Exercises FIFO queue execution, stopped/restarted state, scheduler
- * equality, scheduled sender completion, and cancellation-aware scheduling.
+ * Exercises FIFO queue execution, scheduler equality, scheduled sender
+ * completion, and cancellation-aware scheduling.
  */
 
 #include <bexec/just.hpp>
@@ -116,7 +116,8 @@ void test_scheduler() {
 
     CHECK(!ran);
     CHECK(state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(ran);
     CHECK(state->signal == signal_kind::value);
   }
@@ -129,7 +130,8 @@ void test_scheduler() {
 
     bexec::start(operation);
     CHECK(state->signal == signal_kind::none);
-    CHECK(loop.run_one() == 1);
+    loop.finish();
+    loop.run();
     CHECK(state->signal == signal_kind::value);
     CHECK(state->int_value == 7);
   }
@@ -149,10 +151,12 @@ void test_scheduler() {
     auto operation = bexec::connect(std::move(sender), receiver);
 
     bexec::start(operation);
-    CHECK(target.run_one() == 1);
+    target.finish();
+    target.run();
     CHECK(child_ran);
     CHECK(state->signal == signal_kind::none);
-    CHECK(final.run_one() == 1);
+    final.finish();
+    final.run();
     CHECK(state->signal == signal_kind::value);
     CHECK(state->int_value == 9);
   }

@@ -19,7 +19,6 @@
 #include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/then.hpp>
-#include <cstddef>
 #include <memory>
 #include <string>
 #include <utility>
@@ -71,11 +70,8 @@ void test_repeat_until() {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    std::size_t ran = 0;
-    while (loop.run_one() != 0) {
-      ++ran;
-    }
-    CHECK(ran == 5);
+    loop.finish();
+    loop.run();
     CHECK(count == 5);
     CHECK(state->signal == signal_kind::value);
   }

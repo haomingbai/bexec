@@ -96,7 +96,8 @@ auto op = bexec::connect(
     receiver{});
 
 bexec::start(op);
-loop.run_one();
+loop.finish();
+loop.run();
 ```
 
 `starts_on(scheduler, sender)` first completes `schedule(scheduler)` and then
@@ -199,8 +200,8 @@ auto b = bexec::schedule(sched) | bexec::then([] {});
 
 auto op = bexec::connect(bexec::when_all(std::move(a), std::move(b)), receiver{});
 bexec::start(op);
-while (loop.run_one() != 0) {
-}
+loop.finish();
+loop.run();
 ```
 
 All-success completion sends the concatenated child values in argument order:

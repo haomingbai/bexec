@@ -420,11 +420,8 @@ void test_when_all() {
                        any_receiver{state});
 
     bexec::start(operation);
-    std::size_t ran = 0;
-    while (loop.run_one() != 0) {
-      ++ran;
-    }
-    CHECK(ran == 2);
+    loop.finish();
+    loop.run();
     CHECK(count == 2);
     CHECK(state->signal == signal_kind::value);
   }
@@ -444,11 +441,8 @@ void test_when_all() {
     bexec::start(operation);
     source.request_stop();
 
-    std::size_t ran = 0;
-    while (loop.run_one() != 0) {
-      ++ran;
-    }
-    CHECK(ran == 2);
+    loop.finish();
+    loop.run();
     CHECK(state->signal == signal_kind::stopped);
   }
 

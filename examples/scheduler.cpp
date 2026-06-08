@@ -9,7 +9,6 @@
  */
 
 #include <bexec/bexec.hpp>
-#include <cstddef>
 #include <iostream>
 #include <utility>
 
@@ -36,9 +35,7 @@ int main() {
   bexec::start(first_operation);
   bexec::start(second_operation);
 
-  std::size_t ran = 0;
-  while (loop.run_one() != 0) {
-    ++ran;
-  }
-  std::cout << "run_loop ran " << ran << " queued item(s)\n";
+  loop.finish();
+  loop.run();
+  std::cout << "run_loop drained queued work\n";
 }

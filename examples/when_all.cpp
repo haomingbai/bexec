@@ -35,8 +35,8 @@ int main() {
                      bexec_examples::logging_receiver{"when_all"});
 
   bexec::start(operation);
-  while (loop.run_one() != 0) {
-  }
+  loop.finish();
+  loop.run();
 
   std::cout << "when_all completed children: " << completed << '\n';
 

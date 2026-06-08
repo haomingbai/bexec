@@ -53,8 +53,7 @@ void test_stop_token() {
     auto self_destroy_token = self_destroy_source.get_token();
     int self_destroy_callbacks = 0;
 
-    using callback_type =
-        bexec::inplace_stop_callback<std::function<void()>>;
+    using callback_type = bexec::inplace_stop_callback<std::function<void()>>;
     std::unique_ptr<callback_type> registration;
     std::function<void()> callback = [&] {
       ++self_destroy_callbacks;

@@ -26,6 +26,7 @@
 #include <bexec/scheduler.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/stop_token.hpp>
+#include <cassert>
 #include <concepts>
 #include <cstddef>
 #include <exception>
@@ -116,6 +117,7 @@ class simple_counting_scope {
   [[nodiscard]] association try_associate() noexcept;
 
   void ensure_destructible() noexcept {
+#ifndef NDEBUG
     std::lock_guard lock(mutex_);
     switch (state_.load(std::memory_order_acquire)) {
       case state::unused:
@@ -126,8 +128,9 @@ class simple_counting_scope {
       case state::closed:
       case state::open_and_joining:
       case state::closed_and_joining:
-        std::terminate();
+        assert(false);
     }
+#endif
   }
 
   void disassociate() noexcept {
@@ -158,7 +161,8 @@ class simple_counting_scope {
         case state::unused:
         case state::unused_and_closed:
         case state::joined:
-          std::terminate();
+          assert(false);
+          break;
       }
     }
 
@@ -201,28 +205,26 @@ class simple_counting_scope {
   }
 
   void compare_exchange_state(state expected, state desired) noexcept {
-    if (!state_.compare_exchange_strong(expected, desired,
-                                        std::memory_order_acq_rel,
-                                        std::memory_order_acquire)) {
-      std::terminate();
-    }
+    const bool exchanged = state_.compare_exchange_strong(
+        expected, desired, std::memory_order_acq_rel,
+        std::memory_order_acquire);
+    assert(exchanged);
+    (void)exchanged;
   }
 
   void compare_exchange_count(std::size_t expected,
                               std::size_t desired) noexcept {
-    if (!count_.compare_exchange_strong(expected, desired,
-                                        std::memory_order_acq_rel,
-                                        std::memory_order_acquire)) {
-      std::terminate();
-    }
+    const bool exchanged = count_.compare_exchange_strong(
+        expected, desired, std::memory_order_acq_rel,
+        std::memory_order_acquire);
+    assert(exchanged);
+    (void)exchanged;
   }
 
   void increment_count() noexcept {
     std::size_t current = count_.load(std::memory_order_acquire);
     for (;;) {
-      if (current == static_cast<std::size_t>(-1)) {
-        std::terminate();
-      }
+      assert(current != static_cast<std::size_t>(-1));
       if (count_.compare_exchange_weak(current, current + 1,
                                        std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
@@ -234,9 +236,7 @@ class simple_counting_scope {
   std::size_t decrement_count() noexcept {
     std::size_t current = count_.load(std::memory_order_acquire);
     for (;;) {
-      if (current == 0) {
-        std::terminate();
-      }
+      assert(current != 0);
       if (count_.compare_exchange_weak(current, current - 1,
                                        std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
@@ -347,9 +347,7 @@ class simple_counting_scope::token {
   }
 
   void disassociate() noexcept {
-    if (scope_ == nullptr) {
-      std::terminate();
-    }
+    assert(scope_ != nullptr);
     scope_->disassociate();
   }
 

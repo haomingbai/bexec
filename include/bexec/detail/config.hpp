@@ -23,4 +23,16 @@
 #else
 #define BEXEC_DETAIL_EXCEPTIONS_ENABLED 0
 #endif
+
+#if defined(__clang__) || defined(__GNUC__)
+#define BEXEC_DETAIL_UNREACHABLE() __builtin_unreachable()
+#elif defined(_MSC_VER)
+#define BEXEC_DETAIL_UNREACHABLE() __assume(false)
+#else
+#define BEXEC_DETAIL_UNREACHABLE() \
+  do {                             \
+    for (;;) {                     \
+    }                              \
+  } while (false)
+#endif
 #endif  // BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_

@@ -18,6 +18,7 @@
 #define BEXEC_INCLUDE_BEXEC_TASK_HPP_
 
 #include <bexec/detail/config.hpp>
+#include <cassert>
 #include <coroutine>
 #include <exception>
 #include <optional>
@@ -55,7 +56,8 @@ class task {
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       error = std::current_exception();
 #else
-      std::terminate();
+      assert(false);
+      BEXEC_DETAIL_UNREACHABLE();
 #endif
     }
   };
@@ -132,7 +134,8 @@ class task<void> {
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       error = std::current_exception();
 #else
-      std::terminate();
+      assert(false);
+      BEXEC_DETAIL_UNREACHABLE();
 #endif
     }
   };

@@ -17,6 +17,7 @@
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
 #include <bexec/scheduler.hpp>
+#include <cassert>
 #include <condition_variable>
 #include <exception>
 #include <mutex>
@@ -32,7 +33,7 @@ struct run_loop_operation_base {
 };
 
 class run_loop_schedule_sender;
-}
+}  // namespace detail
 
 /**
  * @brief A minimal thread-safe FIFO run loop for scheduling operation states.
@@ -45,15 +46,17 @@ class run_loop {
   run_loop(const run_loop&) = delete;
   run_loop& operator=(const run_loop&) = delete;
   ~run_loop() noexcept {
+#ifndef NDEBUG
     std::lock_guard lock(mutex_);
-    if (head_ != nullptr || running_) {
-      std::terminate();
-    }
+    assert(head_ == nullptr);
+    assert(!running_);
+#endif
   }
 
   [[nodiscard]] scheduler get_scheduler() noexcept;
 
-  /** @brief Runs queued work until finish() is called and the queue is empty. */
+  /** @brief Runs queued work until finish() is called and the queue is empty.
+   */
   void run() noexcept {
     start_running();
     for (;;) {
@@ -117,9 +120,7 @@ class run_loop {
 
   void start_running() noexcept {
     std::lock_guard lock(mutex_);
-    if (running_) {
-      std::terminate();
-    }
+    assert(!running_);
     running_ = true;
   }
 

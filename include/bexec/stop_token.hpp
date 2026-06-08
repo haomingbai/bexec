@@ -22,7 +22,6 @@
 #include <atomic>
 #include <bexec/detail/type_traits.hpp>
 #include <concepts>
-#include <exception>
 #include <mutex>
 #include <thread>
 #include <type_traits>
@@ -151,13 +150,7 @@ class inplace_stop_callback {
     }
   }
 
-  void invoke() noexcept {
-    try {
-      callback_();
-    } catch (...) {
-      std::terminate();
-    }
-  }
+  void invoke() noexcept { callback_(); }
 
   static void invoke_record(detail::stop_callback_record* record) noexcept {
     auto* owned = static_cast<owned_record*>(record);

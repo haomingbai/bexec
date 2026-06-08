@@ -22,6 +22,7 @@
 #include <bexec/run_loop.hpp>
 #include <bexec/sender.hpp>
 #include <bexec/stop_token.hpp>
+#include <cassert>
 #include <exception>
 #include <optional>
 #include <tuple>
@@ -152,9 +153,9 @@ template <class ErrorVariant>
       error);
 #else
   (void)error;
-  std::terminate();
 #endif
-  std::terminate();
+  assert(false);
+  BEXEC_DETAIL_UNREACHABLE();
 }
 
 }  // namespace detail

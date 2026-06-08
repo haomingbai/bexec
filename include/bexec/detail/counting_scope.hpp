@@ -97,11 +97,7 @@ class scope_stop_callback {
       return;
     }
 
-    try {
-      callback_();
-    } catch (...) {
-      std::terminate();
-    }
+    callback_();
   }
 
   using scope_callback_type =
@@ -503,21 +499,22 @@ class spawn_future_receiver {
         (std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...);
 
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      state_->result().template emplace<result_type>(
-          Tag{}, std::forward<Args>(args)...);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      if constexpr (!nothrow) {
+    if constexpr (!nothrow) {
+      try {
+        state_->result().template emplace<result_type>(
+            Tag{}, std::forward<Args>(args)...);
+      } catch (...) {
         using error_result = std::tuple<set_error_t, std::exception_ptr>;
         state_->result().template emplace<error_result>(
             set_error_t{}, std::current_exception());
-      } else {
-        std::terminate();
       }
+    } else
+#endif
+    {
+      state_->result().template emplace<result_type>(
+          Tag{}, std::forward<Args>(args)...);
     }
-#else
+#if !BEXEC_DETAIL_EXCEPTIONS_ENABLED
     (void)nothrow;
 #endif
 

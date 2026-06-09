@@ -23,6 +23,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <thread>
 #include <tuple>
 #include <utility>
 #include <variant>
@@ -120,6 +121,13 @@ void test_scheduler() {
     loop.run();
     CHECK(ran);
     CHECK(state->signal == signal_kind::value);
+  }
+
+  {
+    bexec::run_loop loop;
+    std::thread runner([&] { loop.run(); });
+    loop.finish();
+    runner.join();
   }
 
   {

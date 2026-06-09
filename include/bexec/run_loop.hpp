@@ -13,6 +13,7 @@
 #ifndef BEXEC_INCLUDE_BEXEC_RUN_LOOP_HPP_
 #define BEXEC_INCLUDE_BEXEC_RUN_LOOP_HPP_
 
+#include <atomic>
 #include <bexec/completion_signatures.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>
@@ -39,6 +40,9 @@ class run_loop_schedule_sender;
  * @brief A minimal thread-safe FIFO run loop for scheduling operation states.
  */
 class run_loop {
+ private:
+  enum class run_loop_state { starting, running, finishing, finished };
+
  public:
   class scheduler;
 
@@ -46,11 +50,11 @@ class run_loop {
   run_loop(const run_loop&) = delete;
   run_loop& operator=(const run_loop&) = delete;
   ~run_loop() noexcept {
-#ifndef NDEBUG
     std::lock_guard lock(mutex_);
-    assert(head_ == nullptr);
-    assert(!running_);
-#endif
+    if (head_ != nullptr ||
+        state_.load(std::memory_order_acquire) == run_loop_state::running) {
+      std::terminate();
+    }
   }
 
   [[nodiscard]] scheduler get_scheduler() noexcept;
@@ -58,7 +62,7 @@ class run_loop {
   /** @brief Runs queued work until finish() is called and the queue is empty.
    */
   void run() noexcept {
-    start_running();
+    begin_run();
     for (;;) {
       detail::run_loop_operation_base* operation = pop_blocking();
       if (operation == nullptr) {
@@ -70,9 +74,17 @@ class run_loop {
 
   /** @brief Requests that run() return after already queued work is drained. */
   void finish() noexcept {
-    {
-      std::lock_guard lock(mutex_);
-      finishing_ = true;
+    run_loop_state expected = run_loop_state::starting;
+    if (!state_.compare_exchange_strong(expected, run_loop_state::finishing,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_acquire)) {
+      if (expected != run_loop_state::running ||
+          !state_.compare_exchange_strong(expected, run_loop_state::finishing,
+                                          std::memory_order_acq_rel,
+                                          std::memory_order_acquire)) {
+        assert(false);
+        std::terminate();
+      }
     }
     cv_.notify_all();
   }
@@ -96,9 +108,19 @@ class run_loop {
 
   detail::run_loop_operation_base* pop_blocking() noexcept {
     std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] { return head_ != nullptr || finishing_; });
+    cv_.wait(lock, [this] {
+      return head_ != nullptr || state_.load(std::memory_order_acquire) ==
+                                     run_loop_state::finishing;
+    });
     if (head_ == nullptr) {
-      running_ = false;
+      run_loop_state expected = run_loop_state::finishing;
+      const bool exchanged = state_.compare_exchange_strong(
+          expected, run_loop_state::finished, std::memory_order_acq_rel,
+          std::memory_order_acquire);
+      assert(exchanged);
+      if (!exchanged) {
+        std::terminate();
+      }
       return nullptr;
     }
     return pop_locked();
@@ -106,9 +128,6 @@ class run_loop {
 
   detail::run_loop_operation_base* pop_locked() noexcept {
     detail::run_loop_operation_base* operation = head_;
-    if (operation == nullptr) {
-      return nullptr;
-    }
 
     head_ = operation->next;
     if (head_ == nullptr) {
@@ -118,18 +137,25 @@ class run_loop {
     return operation;
   }
 
-  void start_running() noexcept {
-    std::lock_guard lock(mutex_);
-    assert(!running_);
-    running_ = true;
+  void begin_run() noexcept {
+    run_loop_state expected = run_loop_state::starting;
+    if (state_.compare_exchange_strong(expected, run_loop_state::running,
+                                       std::memory_order_acq_rel,
+                                       std::memory_order_acquire)) {
+      return;
+    }
+    if (expected == run_loop_state::finishing) {
+      return;
+    }
+    assert(false);
+    std::terminate();
   }
 
   std::mutex mutex_;
   std::condition_variable cv_;
   detail::run_loop_operation_base* head_{nullptr};
   detail::run_loop_operation_base* tail_{nullptr};
-  bool finishing_{false};
-  bool running_{false};
+  std::atomic<run_loop_state> state_{run_loop_state::starting};
 };
 
 /**

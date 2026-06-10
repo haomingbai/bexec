@@ -12,6 +12,7 @@
  * completion, and cancellation-aware scheduling.
  */
 
+#include <atomic>
 #include <bexec/just.hpp>
 #include <bexec/on.hpp>
 #include <bexec/operation_state.hpp>
@@ -21,12 +22,14 @@
 #include <bexec/sync_wait.hpp>
 #include <bexec/then.hpp>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
 #include <thread>
 #include <tuple>
 #include <utility>
 #include <variant>
+#include <vector>
 
 #include "test_support.hpp"
 
@@ -64,6 +67,17 @@ struct scheduled_int_receiver {
   void set_stopped() noexcept { state->signal = signal_kind::stopped; }
 
   [[nodiscard]] scheduler_env get_env() const noexcept { return env; }
+};
+
+struct counting_receiver {
+  std::atomic<int>* count{};
+
+  void set_value() noexcept { count->fetch_add(1, std::memory_order_relaxed); }
+
+  template <class Error>
+  void set_error(Error&&) noexcept {}
+
+  void set_stopped() noexcept {}
 };
 
 class sync_choice_sender {
@@ -121,6 +135,84 @@ void test_scheduler() {
     loop.run();
     CHECK(ran);
     CHECK(state->signal == signal_kind::value);
+  }
+
+  {
+    bexec::run_loop loop;
+    std::vector<int> order;
+    auto scheduler = loop.get_scheduler();
+
+    auto first =
+        bexec::schedule(scheduler) | bexec::then([&] { order.push_back(1); });
+    auto second =
+        bexec::schedule(scheduler) | bexec::then([&] { order.push_back(2); });
+    auto third =
+        bexec::schedule(scheduler) | bexec::then([&] { order.push_back(3); });
+    auto first_operation = bexec::connect(std::move(first), any_receiver{});
+    auto second_operation = bexec::connect(std::move(second), any_receiver{});
+    auto third_operation = bexec::connect(std::move(third), any_receiver{});
+
+    bexec::start(first_operation);
+    bexec::start(second_operation);
+    bexec::start(third_operation);
+    loop.finish();
+    loop.run();
+
+    CHECK(order.size() == 3);
+    if (order.size() == 3) {
+      CHECK(order[0] == 1);
+      CHECK(order[1] == 2);
+      CHECK(order[2] == 3);
+    }
+  }
+
+  {
+    bexec::run_loop loop;
+    std::atomic<int> completed{0};
+    auto sender = bexec::schedule(loop.get_scheduler());
+    using operation_type =
+        decltype(bexec::connect(sender, counting_receiver{&completed}));
+    constexpr int thread_count = 4;
+    constexpr int operations_per_thread = 128;
+    constexpr int operation_count = thread_count * operations_per_thread;
+    std::mutex operations_mutex;
+    std::vector<std::unique_ptr<operation_type>> operations;
+    operations.reserve(operation_count);
+    std::atomic<int> ready{0};
+    std::atomic<bool> released{false};
+
+    std::thread runner([&] { loop.run(); });
+    std::vector<std::thread> producers;
+    producers.reserve(thread_count);
+    for (int thread = 0; thread != thread_count; ++thread) {
+      producers.emplace_back([&] {
+        ready.fetch_add(1, std::memory_order_release);
+        while (!released.load(std::memory_order_acquire)) {
+          std::this_thread::yield();
+        }
+        for (int index = 0; index != operations_per_thread; ++index) {
+          auto operation = std::make_unique<operation_type>(
+              loop, counting_receiver{&completed});
+          operation_type* operation_ptr = operation.get();
+          {
+            std::lock_guard lock(operations_mutex);
+            operations.push_back(std::move(operation));
+          }
+          bexec::start(*operation_ptr);
+        }
+      });
+    }
+    while (ready.load(std::memory_order_acquire) != thread_count) {
+      std::this_thread::yield();
+    }
+    released.store(true, std::memory_order_release);
+    for (std::thread& producer : producers) {
+      producer.join();
+    }
+    loop.finish();
+    runner.join();
+
+    CHECK(completed.load(std::memory_order_relaxed) == operation_count);
   }
 
   {

@@ -20,7 +20,6 @@
 #include <bexec/scheduler.hpp>
 #include <cassert>
 #include <condition_variable>
-#include <exception>
 #include <mutex>
 #include <utility>
 
@@ -32,6 +31,15 @@ struct run_loop_operation_base {
   virtual ~run_loop_operation_base() = default;
   virtual void execute() noexcept = 0;
 };
+
+struct run_loop_closed_operation final : run_loop_operation_base {
+  void execute() noexcept override { assert(false); }
+};
+
+inline run_loop_operation_base* run_loop_closed_stack() noexcept {
+  static run_loop_closed_operation operation;
+  return &operation;
+}
 
 class run_loop_schedule_sender;
 }  // namespace detail
@@ -50,11 +58,10 @@ class run_loop {
   run_loop(const run_loop&) = delete;
   run_loop& operator=(const run_loop&) = delete;
   ~run_loop() noexcept {
-    std::lock_guard lock(mutex_);
-    if (head_ != nullptr ||
-        state_.load(std::memory_order_acquire) == run_loop_state::running) {
-      std::terminate();
-    }
+    detail::run_loop_operation_base* head =
+        head_.load(std::memory_order_acquire);
+    assert(head == nullptr || head == detail::run_loop_closed_stack());
+    assert(state_.load(std::memory_order_acquire) != run_loop_state::running);
   }
 
   [[nodiscard]] scheduler get_scheduler() noexcept;
@@ -62,13 +69,15 @@ class run_loop {
   /** @brief Runs queued work until finish() is called and the queue is empty.
    */
   void run() noexcept {
-    begin_run();
+    if (!begin_run()) {
+      return;
+    }
     for (;;) {
-      detail::run_loop_operation_base* operation = pop_blocking();
-      if (operation == nullptr) {
+      detail::run_loop_operation_base* operations = pop_all_blocking();
+      if (operations == nullptr) {
         return;
       }
-      operation->execute();
+      execute_all(operations);
     }
   }
 
@@ -83,78 +92,138 @@ class run_loop {
                                           std::memory_order_acq_rel,
                                           std::memory_order_acquire)) {
         assert(false);
-        std::terminate();
+        return;
       }
     }
-    cv_.notify_all();
+    wake_all_waiters();
   }
 
  private:
   friend class detail::run_loop_schedule_sender;
 
   void enqueue(detail::run_loop_operation_base& operation) noexcept {
-    {
-      std::lock_guard lock(mutex_);
-      operation.next = nullptr;
-      if (tail_ == nullptr) {
-        head_ = &operation;
-      } else {
-        tail_->next = &operation;
+    detail::run_loop_operation_base* head =
+        head_.load(std::memory_order_acquire);
+    do {
+      if (head == detail::run_loop_closed_stack()) {
+        assert(false);
+        return;
       }
-      tail_ = &operation;
-    }
+      operation.next = head;
+    } while (!head_.compare_exchange_weak(head, &operation,
+                                          std::memory_order_acq_rel,
+                                          std::memory_order_acquire));
+
+    wake_one_waiter();
+  }
+
+  void wake_one_waiter() noexcept {
+    // Queue/state publication is atomic. The mutex only serializes with
+    // wait() entering sleep after a false predicate check.
+    std::lock_guard lock(mutex_);
     cv_.notify_one();
   }
 
-  detail::run_loop_operation_base* pop_blocking() noexcept {
-    std::unique_lock lock(mutex_);
-    cv_.wait(lock, [this] {
-      return head_ != nullptr || state_.load(std::memory_order_acquire) ==
-                                     run_loop_state::finishing;
-    });
-    if (head_ == nullptr) {
-      run_loop_state expected = run_loop_state::finishing;
-      const bool exchanged = state_.compare_exchange_strong(
-          expected, run_loop_state::finished, std::memory_order_acq_rel,
-          std::memory_order_acquire);
-      assert(exchanged);
-      if (!exchanged) {
-        std::terminate();
+  void wake_all_waiters() noexcept {
+    // Queue/state publication is atomic. The mutex only serializes with
+    // wait() entering sleep after a false predicate check.
+    std::lock_guard lock(mutex_);
+    cv_.notify_all();
+  }
+
+  detail::run_loop_operation_base* pop_all_blocking() noexcept {
+    for (;;) {
+      if (detail::run_loop_operation_base* operations = try_pop_all()) {
+        return reverse(operations);
       }
-      return nullptr;
+      if (state_.load(std::memory_order_acquire) == run_loop_state::finishing &&
+          try_finish_empty()) {
+        return nullptr;
+      }
+
+      std::unique_lock lock(mutex_);
+      cv_.wait(lock, [this] {
+        return has_work() || state_.load(std::memory_order_acquire) ==
+                                 run_loop_state::finishing;
+      });
     }
-    return pop_locked();
   }
 
-  detail::run_loop_operation_base* pop_locked() noexcept {
-    detail::run_loop_operation_base* operation = head_;
-
-    head_ = operation->next;
-    if (head_ == nullptr) {
-      tail_ = nullptr;
+  detail::run_loop_operation_base* try_pop_all() noexcept {
+    detail::run_loop_operation_base* operations =
+        head_.load(std::memory_order_acquire);
+    while (operations != nullptr &&
+           operations != detail::run_loop_closed_stack()) {
+      if (head_.compare_exchange_weak(operations, nullptr,
+                                      std::memory_order_acq_rel,
+                                      std::memory_order_acquire)) {
+        return operations;
+      }
     }
-    operation->next = nullptr;
-    return operation;
+    return nullptr;
   }
 
-  void begin_run() noexcept {
+  bool try_finish_empty() noexcept {
+    detail::run_loop_operation_base* expected = nullptr;
+    if (!head_.compare_exchange_strong(
+            expected, detail::run_loop_closed_stack(),
+            std::memory_order_acq_rel, std::memory_order_acquire)) {
+      return false;
+    }
+
+    run_loop_state state = run_loop_state::finishing;
+    const bool exchanged = state_.compare_exchange_strong(
+        state, run_loop_state::finished, std::memory_order_acq_rel,
+        std::memory_order_acquire);
+    assert(exchanged);
+    return true;
+  }
+
+  [[nodiscard]] bool has_work() const noexcept {
+    detail::run_loop_operation_base* head =
+        head_.load(std::memory_order_acquire);
+    return head != nullptr && head != detail::run_loop_closed_stack();
+  }
+
+  static detail::run_loop_operation_base* reverse(
+      detail::run_loop_operation_base* operations) noexcept {
+    detail::run_loop_operation_base* reversed = nullptr;
+    while (operations != nullptr) {
+      detail::run_loop_operation_base* next = operations->next;
+      operations->next = reversed;
+      reversed = operations;
+      operations = next;
+    }
+    return reversed;
+  }
+
+  static void execute_all(
+      detail::run_loop_operation_base* operations) noexcept {
+    while (operations != nullptr) {
+      detail::run_loop_operation_base* operation = operations;
+      operations = operations->next;
+      operation->next = nullptr;
+      operation->execute();
+    }
+  }
+
+  bool begin_run() noexcept {
     run_loop_state expected = run_loop_state::starting;
     if (state_.compare_exchange_strong(expected, run_loop_state::running,
                                        std::memory_order_acq_rel,
                                        std::memory_order_acquire)) {
-      return;
+      return true;
     }
     if (expected == run_loop_state::finishing) {
-      return;
+      return true;
     }
     assert(false);
-    std::terminate();
+    return false;
   }
 
   std::mutex mutex_;
   std::condition_variable cv_;
-  detail::run_loop_operation_base* head_{nullptr};
-  detail::run_loop_operation_base* tail_{nullptr};
+  std::atomic<detail::run_loop_operation_base*> head_{nullptr};
   std::atomic<run_loop_state> state_{run_loop_state::starting};
 };
 

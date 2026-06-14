@@ -9,6 +9,36 @@ a full P2300 implementation.
 The design favors readable member customization and explicit limitations over
 heavy metaprogramming.
 
+### Component Map
+
+```mermaid
+graph TB
+    subgraph "Public API"
+        CPO["CPOs<br/>start / connect / schedule<br/>set_value / set_error / set_stopped<br/>get_env / query"]
+        SENDERS["Sender Factories<br/>just / just_error / just_stopped"]
+        ADAPTORS["Adaptors<br/>then / upon_* / let_*<br/>into_variant / when_all<br/>repeat_until / starts_on / on"]
+        SCHED["Scheduling<br/>run_loop / sync_wait"]
+        SCOPES["Scopes<br/>counting_scope / spawn / spawn_future"]
+        TASK["Coroutines<br/>task&lt;T&gt;"]
+    end
+
+    subgraph "Internal Detail"
+        OPS["Operation Helpers<br/>pass_through_operation"]
+        STORAGE["Type-Erasure Storage<br/>manual_lifetime<br/>manual_variant<br/>operation_storage"]
+        META["Metadata<br/>type_list / completion_signatures<br/>signature transforms"]
+    end
+
+    CPO --> SENDERS
+    CPO --> ADAPTORS
+    CPO --> SCHED
+    CPO --> SCOPES
+    ADAPTORS --> STORAGE
+    SCHED --> STORAGE
+    SCOPES --> STORAGE
+    ADAPTORS --> META
+    SENDERS --> META
+```
+
 ## Concepts
 
 The public concepts are intentionally small:
@@ -47,6 +77,27 @@ There is no `tag_invoke` support. This is intentional. It keeps overload
 resolution easy to reason about, keeps diagnostics smaller, and avoids exposing
 unstable implementation hooks while the library is still an MVP.
 
+### CPO Dispatch Model
+
+```mermaid
+flowchart LR
+    subgraph "User Code"
+        CALL["bexec::start(op)"]
+    end
+
+    subgraph "CPO Layer"
+        CPO["start_t::operator()"]
+    end
+
+    subgraph "Member Function"
+        MEMBER["op.start()"]
+    end
+
+    CALL --> CPO
+    CPO -->|"requires { op.start() }<br/>non-rvalue, noexcept, void"| MEMBER
+    MEMBER -->|"🚫 no tag_invoke<br/>🚫 no ADL two-step<br/>✅ member only"| RESULT["void"]
+```
+
 ## Completion Metadata
 
 `completion_signatures<Sigs...>` uses P2300-style function types:
@@ -59,11 +110,24 @@ using completions = bexec::completion_signatures<
 ```
 
 The public helpers `completion_signatures_of_t`, `value_types_of_t`,
-`error_types_of_t`, and `sends_stopped` inspect this signature pack. The query
-path is environment-aware: `completion_signatures_of_t<Sender, Env>` calls a
-standard-shaped static `Sender::get_completion_signatures<Sender, Env>()` when
-present, and otherwise falls back to the legacy nested `completion_signatures`
-member. `sender_to<Sender, Receiver>` checks the sender against the receiver's
+`error_types_of_t`, and `sends_stopped` inspect this signature pack. For example:
+
+```cpp
+using sigs = bexec::completion_signatures_of_t<MySender>;
+using values = bexec::value_types_of_t<MySender>;
+// variant_or_empty<std::tuple<int>, std::tuple<std::string>>
+
+using errors = bexec::error_types_of_t<MySender>;
+// variant_or_empty<std::exception_ptr, std::error_code>
+
+constexpr bool can_stop = bexec::sends_stopped<MySender>;
+```
+
+The query path is environment-aware: `completion_signatures_of_t<Sender, Env>`
+calls a standard-shaped static
+`Sender::get_completion_signatures<Sender, Env>()` when present, and otherwise
+falls back to the legacy nested `completion_signatures` member.
+`sender_to<Sender, Receiver>` checks the sender against the receiver's
 environment.
 
 `then`, `upon_error`, and `upon_stopped` transform the selected completion kind
@@ -79,6 +143,66 @@ tuple alternatives removed. Plain `when_all` requires each child sender to have
 at most one value completion and declares concatenated successful values plus
 raw child error alternatives. `when_all_with_variant` applies `into_variant` to
 each child before `when_all`.
+
+## Then/Upon Completion Adaptors
+
+`then`, `upon_error`, and `upon_stopped` follow a simpler pattern than `let_*`:
+the selected completion is transformed into a value completion via a callable,
+while non-selected completions pass through unchanged.
+
+The `completion_adaptor_sender` (defined in `detail/then.hpp`) wraps the upstream
+sender. When connected, it wraps the downstream receiver in a
+`completion_adaptor_receiver` that intercepts the selected completion kind:
+
+- `then` intercepts `set_value(args...)`, calls `fn(args...)`, produces
+  `set_value(fn_result)` or `set_value()` for void returns.
+- `upon_error` intercepts `set_error(error)`, calls `fn(error)`, produces
+  `set_value(fn_result)`.
+- `upon_stopped` intercepts `set_stopped()`, calls `fn()`, produces
+  `set_value(fn_result)`.
+
+Non-selected completions are forwarded directly by the internal receiver without
+invoking the callable.
+
+Signature transformation follows a uniform rule: the selected completion
+arguments are forwarded to `fn`; the return type becomes
+`set_value_t(decay_t<Result>)` (or `set_value_t()` for void return); and
+`set_error_t(std::exception_ptr)` is always added to cover callable or connect
+exceptions.
+
+The operation state uses `detail::pass_through_operation` to wrap the upstream
+operation. This is a lightweight forwarding wrapper: operation storage is
+delegated to the upstream sender's own operation state without custom allocation
+or type-erased dispatch.
+
+The pipeable `completion_adaptor_closure` follows the same pattern as
+`let_closure`. Adaptor closure objects are cheap value types that store the
+callable and produce an adaptor sender when applied via `operator|`.
+
+## into_variant Design Rationale
+
+`into_variant` maps multiple `set_value_t(Args...)` alternatives into a single
+`set_value_t(std::variant<std::tuple<Args...>, ...>)` signature. This
+normalization is required by `when_all_with_variant` so that child senders with
+multiple value shapes can participate in structured concurrency without forcing
+`when_all` to handle heterogeneous value alternatives per child.
+
+Duplicate tuple alternatives are removed at compile time via the internal
+`unique_type_list_t` utility. For example, a sender that can complete as
+`set_value_t(int)` or `set_value_t(int)` through two different paths produces
+`variant<std::tuple<int>>` rather than `variant<std::tuple<int>,
+std::tuple<int>>`.
+
+The implementation is intentionally simple: the `into_variant_receiver` wraps
+the downstream receiver, storing the value as a variant in-place. No custom
+operation state is required — `into_variant` reuses `pass_through_operation`
+because it does not need to store extra child operations or manage queued
+callbacks. It only intercepts `set_value` to pack the value into the variant
+before forwarding.
+
+`when_all_with_variant` is defined as the composition
+`when_all(into_variant(sender)...)`, applying `into_variant` to each child
+before constructing the `when_all` sender.
 
 ## Ownership Model
 
@@ -131,6 +255,105 @@ shared cancellation token.
 `get_delegation_scheduler` while delegating other queries. Scheduling adaptors
 use scheduler-aware environments so child operations can observe the execution
 resource they are running on.
+
+### Query Delegation
+
+```mermaid
+flowchart TD
+    R["receiver.get_env()"] --> Q["env.query(tag)"]
+
+    Q -->|"get_stop_token"| ST{env has<br/>get_stop_token?}
+    ST -->|yes| ST_VAL["return token"]
+    ST -->|no| ST_FALLBACK["never_stop_token"]
+
+    Q -->|"get_allocator"| AL{env has<br/>get_allocator?}
+    AL -->|yes| AL_VAL["return allocator"]
+    AL -->|no| AL_FALLBACK["std::allocator&lt;std::byte&gt;"]
+
+    Q -->|"get_scheduler"| SC{env has<br/>get_scheduler?}
+    SC -->|yes| SC_VAL["return scheduler"]
+    SC -->|no| SC_ERR["❌ ill-formed (required)"]
+
+    subgraph "env_with_stop_token"
+        E_ST["override: get_stop_token → token"]
+        E_ST_OTHER["delegate: all others → BaseEnv"]
+    end
+
+    subgraph "env_with_scheduler"
+        E_SC["override: get_scheduler → sched"]
+        E_SC_DEL["override: get_delegation_scheduler → sched"]
+        E_SC_OTHER["delegate: all others → BaseEnv"]
+    end
+```
+
+## Type-Erasure Strategy
+
+Several operation states need to store one of several possible child operation
+types without heap allocation, `std::function`, or `std::optional`. The library
+uses three internal detail types for this, all defined in
+`include/bexec/detail/` and not part of the public API contract.
+
+**`detail::manual_lifetime<T>`** — Optional-like storage that can construct
+non-movable types directly from a factory result. Unlike `std::optional<T>`,
+it does not require `T` to be move-constructible. Used when an operation state
+stores exactly one child operation whose concrete type is known. An operation
+state that conditionally stores a child (e.g., only when a specific completion
+kind is selected) uses `manual_lifetime` with `emplace`/`emplace_from` to
+deferred-construct the child and `reset()` to destroy it before switching to
+a different child.
+
+**`detail::manual_variant<type_list<Alternatives...>>`** — Variant-like storage
+where the set of alternatives is fixed at compile time. Each alternative is
+constructed directly from a factory via `emplace_from<T>(factory)` without hidden
+moves. The active alternative is tracked by a function pointer `destroy_` that
+knows how to destroy the stored object. Copy and move are deleted. This is used
+when one of several possible types must be stored — for example, the child
+operation types implied by the selected upstream completion signatures in
+`let_*` and `on`.
+
+**`detail::operation_storage<type_list<Operations...>>`** — Extends
+`manual_variant` with type-erased `start()` dispatch. It stores a function
+pointer `start_` that dispatches to `bexec::start()` on the active alternative.
+Used in `on` to start whichever child operation is currently active without
+requiring the caller to know its concrete type. The interface exposes
+`emplace_from<T>(factory)` to construct an alternative and wire up the
+`start_` pointer, and `start()` to launch the active operation.
+
+These types share a common design rationale:
+
+- **No heap allocation** — storage is a fixed-size aligned buffer shared among
+  alternatives (sized to the maximum `sizeof(Alternative)`).
+- **No move requirement** — operation states constructed by `emplace_from` are
+  never moved, so child operation states can contain internal pointers to
+  themselves and delete copy/move operations.
+- **Explicit construction** — construction is always explicit through a factory,
+  never implicit or copy-based.
+- **Not public API** — these are implementation details; the public API surface
+  remains sender/receiver concepts and concrete sender/adaptor types.
+
+### Storage Hierarchy
+
+```mermaid
+flowchart TB
+    subgraph "operation_storage&lt;OpA, OpB, OpC&gt;"
+        direction TB
+        START_PTR["start_ = &start_model&lt;OpA&gt;"]
+        subgraph "manual_variant&lt;OpA, OpB, OpC&gt;"
+            DESTROY_PTR["destroy_ = &destroy_model&lt;OpA&gt;"]
+            BUFFER["aligned storage[max(sizeof(OpA), sizeof(OpB), sizeof(OpC))]"]
+        end
+        START_PTR -->|"dispatches to"| BEXEC_START["bexec::start(op)"]
+        BEXEC_START -->|"calls"| OP_START["op.start()"]
+    end
+
+    subgraph "Used in"
+        ON["on adaptor<br/>(type-erased child start)"]
+        LET["let_* adaptors<br/>(one of N child operation types)"]
+    end
+
+    ON --> START_PTR
+    LET --> DESTROY_PTR
+```
 
 ## Stop Token Model
 
@@ -225,6 +448,30 @@ is delivered.
 When exceptions are enabled, exceptions thrown while invoking the callable or
 connecting the child sender are delivered as `set_error(std::exception_ptr)`.
 With exceptions disabled, throwing callables are not supported.
+
+### `let_*` Operation State Layout
+
+```mermaid
+flowchart TB
+    subgraph "let_operation&lt;Tag, Sender, Fn, Receiver&gt;"
+        FN_STORE["fn_ (callable)"]
+        RECV_STORE["receiver_ (downstream)"]
+        UPSTREAM["manual_lifetime&lt;UpstreamOp&gt;<br/>upstream operation"]
+        CHILD["operation_storage&lt;ChildOpA, ChildOpB, ...&gt;<br/>selected child operation"]
+    end
+
+    UPSTREAM_RECV["let_receiver<br/>(intercepts selected completion)"] -->|"pointer"| LET_OP["let_operation"]
+    CHILD_RECV["let_child_receiver<br/>(forwards to downstream)"] -->|"pointer"| LET_OP
+
+    UPSTREAM -.->|"started first"| UPSTREAM_RECV
+    UPSTREAM_RECV -->|"set_value/set_error/set_stopped<br/>→ calls fn → returns child sender"| CHILD
+    CHILD -.->|"started after fn"| CHILD_RECV
+    CHILD_RECV -->|"terminal signal"| RECV_STORE
+
+    style LET_OP fill:#f9f,stroke:#333
+    style UPSTREAM fill:#bbf,stroke:#333
+    style CHILD fill:#bfb,stroke:#333
+```
 
 ## repeat_until State Machine
 

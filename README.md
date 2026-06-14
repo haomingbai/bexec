@@ -155,4 +155,4 @@ loop.run();
   `std::exception_ptr`; the same limitation applies to other adaptors that
   report callable/connect failures as `std::exception_ptr`.
 
-See `docs/usage.md`, `docs/design.md`, and `docs/maintenance.md` for details.
+See `docs/usage/`, `docs/design.md`, and `docs/maintenance.md` for details.

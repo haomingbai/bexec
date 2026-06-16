@@ -481,18 +481,24 @@ iteration creates a fresh sender and connects it to an internal receiver.
 This avoids restarting the same operation state, which would be invalid for
 many senders.
 
-The implementation handles synchronous and asynchronous completion through a
-small trampoline:
+The implementation handles synchronous and asynchronous completion with an epoch
+counter:
 
-- Before starting a child operation, it marks the child as pending.
-- If the child completes synchronously inside `start()`, the child receiver
-  clears the pending flag and records whether another iteration is needed.
-- The outer loop continues directly, so it does not recursively call `start()`.
-- If the child remains pending after `start()` returns, the loop exits.
-- A later asynchronous completion callback re-enters the drain loop if another
-  iteration is needed.
+- Before starting a child operation, the drain loop records the current epoch.
+- The child receiver stores the child completion, including value arguments, in
+  operation-owned storage.
+- The child receiver and the drain loop race to advance the epoch after
+  completion or `start()` return.
+- The thread whose compare-exchange fails processes the stored completion: it
+  runs the predicate, completes the receiver, or starts the next iteration.
+- If the child completed before `start()` returned, the drain loop processes the
+  stored completion and can continue directly.
+- If `start()` returned before the child completed, the later asynchronous
+  callback processes the stored completion and re-enters the drain loop when the
+  predicate asks for another iteration.
 
-Child values are discarded. Errors and stopped signals are propagated.
+Child values from the most recent successful iteration are forwarded when the
+predicate returns true. Errors and stopped signals are propagated.
 Cancellation is checked through the receiver environment before each iteration.
 
 ## when_all Operation State

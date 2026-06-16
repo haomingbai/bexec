@@ -25,6 +25,7 @@
 #include <optional>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 
 namespace bexec::detail {
@@ -37,6 +38,19 @@ using remove_cvref_t = std::remove_cv_t<std::remove_reference_t<T>>;
 
 template <class... Ts>
 using decayed_tuple = std::tuple<std::decay_t<Ts>...>;
+
+template <bool Include, class... Ts>
+struct maybe_type_list {
+  using type = type_list<>;
+};
+
+template <class... Ts>
+struct maybe_type_list<true, Ts...> {
+  using type = type_list<Ts...>;
+};
+
+template <bool Include, class... Ts>
+using maybe_type_list_t = typename maybe_type_list<Include, Ts...>::type;
 
 template <class T, class Variant>
 struct variant_contains;
@@ -235,6 +249,42 @@ using sender_errors_with_exception_t =
                                            type_list<std::exception_ptr>>>;
 
 template <class Signature>
+struct decayed_completion_signature;
+
+template <class Tag, class... Args>
+struct decayed_completion_signature<Tag(Args...)> {
+  using type = Tag(std::decay_t<Args>...);
+};
+
+template <class Signature>
+using decayed_completion_signature_t =
+    typename decayed_completion_signature<Signature>::type;
+
+template <class Signature>
+struct completion_result_tuple;
+
+template <class Tag, class... Args>
+struct completion_result_tuple<Tag(Args...)> {
+  using type = std::tuple<Tag, std::decay_t<Args>...>;
+};
+
+template <class Signature>
+using completion_result_tuple_t =
+    typename completion_result_tuple<Signature>::type;
+
+template <class Signature>
+struct completion_signature_nothrow_decay;
+
+template <class Tag, class... Args>
+struct completion_signature_nothrow_decay<Tag(Args...)>
+    : std::bool_constant<(
+          std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...)> {};
+
+template <class Signature>
+inline constexpr bool completion_signature_nothrow_decay_v =
+    completion_signature_nothrow_decay<Signature>::value;
+
+template <class Signature>
 struct value_tuple_for_signature {
   using type = type_list<>;
 };
@@ -390,12 +440,61 @@ template <class ErrorList>
 using set_error_signatures_from_type_list_t =
     typename set_error_signatures_from_type_list<ErrorList>::type;
 
+template <class Tuple>
+struct value_completion {
+  explicit value_completion(Tuple tuple) : values(std::move(tuple)) {}
+  Tuple values;
+};
+
+template <class Error>
+struct error_completion {
+  explicit error_completion(Error error_value)
+      : error(std::move(error_value)) {}
+  Error error;
+};
+
+struct stopped_completion {};
+
+template <class Signature>
+struct completion_variant_alternative {
+  using type = type_list<>;
+};
+
+template <class... Args>
+struct completion_variant_alternative<set_value_t(Args...)> {
+  using type = type_list<value_completion<decayed_tuple<Args...>>>;
+};
+
+template <class Error>
+struct completion_variant_alternative<set_error_t(Error)> {
+  using type = type_list<error_completion<std::decay_t<Error>>>;
+};
+
+template <>
+struct completion_variant_alternative<set_stopped_t()> {
+  using type = type_list<stopped_completion>;
+};
+
+template <class Completions>
+struct completion_variant_type_list;
+
+template <class... Signatures>
+struct completion_variant_type_list<completion_signatures<Signatures...>> {
+  using type = unique_type_list_t<concat_type_lists_t<
+      typename completion_variant_alternative<Signatures>::type...>>;
+};
+
+template <class Completions>
+using completion_variant_t =
+    variant_from_type_list_t<typename completion_variant_type_list<
+        Completions>::type>;
+
 template <class List>
 struct value_variant_from_tuple_list;
 
 template <class... Tuples>
 struct value_variant_from_tuple_list<type_list<Tuples...>> {
-  using type = std::variant<Tuples...>;
+  using type = variant_from_type_list_t<type_list<Tuples...>>;
 };
 
 template <class List>

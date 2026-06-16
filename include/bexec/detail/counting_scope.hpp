@@ -371,59 +371,13 @@ class spawn_operation {
   bool completed_{false};
 };
 
-template <class Signature>
-struct spawn_future_result_tuple;
-
-template <class Tag, class... Args>
-struct spawn_future_result_tuple<Tag(Args...)> {
-  using type = std::tuple<Tag, std::decay_t<Args>...>;
-};
-
-template <class Signature>
-using spawn_future_result_tuple_t =
-    typename spawn_future_result_tuple<Signature>::type;
-
-template <class Signature>
-struct spawn_future_decayed_signature;
-
-template <class Tag, class... Args>
-struct spawn_future_decayed_signature<Tag(Args...)> {
-  using type = Tag(std::decay_t<Args>...);
-};
-
-template <class Signature>
-using spawn_future_decayed_signature_t =
-    typename spawn_future_decayed_signature<Signature>::type;
-
-template <class Signature>
-struct spawn_future_signature_nothrow_decay;
-
-template <class Tag, class... Args>
-struct spawn_future_signature_nothrow_decay<Tag(Args...)>
-    : std::bool_constant<(
-          std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...)> {};
-
-template <bool Include, class... Ts>
-struct spawn_future_maybe_type_list {
-  using type = type_list<>;
-};
-
-template <class... Ts>
-struct spawn_future_maybe_type_list<true, Ts...> {
-  using type = type_list<Ts...>;
-};
-
-template <bool Include, class... Ts>
-using spawn_future_maybe_type_list_t =
-    typename spawn_future_maybe_type_list<Include, Ts...>::type;
-
 template <class Completions>
 struct spawn_future_all_nothrow_decay;
 
 template <class... Signatures>
 struct spawn_future_all_nothrow_decay<completion_signatures<Signatures...>>
     : std::bool_constant<(
-          spawn_future_signature_nothrow_decay<Signatures>::value && ...)> {};
+          completion_signature_nothrow_decay_v<Signatures> && ...)> {};
 
 template <class Completions>
 inline constexpr bool spawn_future_all_nothrow_decay_v =
@@ -437,10 +391,10 @@ struct spawn_future_result_variant<completion_signatures<Signatures...>> {
   using exception_result = std::tuple<set_error_t, std::exception_ptr>;
   using result_list = unique_type_list_t<concat_type_lists_t<
       type_list<std::monostate, std::tuple<set_stopped_t>>,
-      spawn_future_maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
-                                         completion_signatures<Signatures...>>,
-                                     exception_result>,
-      type_list<spawn_future_result_tuple_t<Signatures>...>>>;
+      maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
+                            completion_signatures<Signatures...>>,
+                        exception_result>,
+      type_list<completion_result_tuple_t<Signatures>...>>>;
   using type = variant_from_type_list_t<result_list>;
 };
 
@@ -457,10 +411,10 @@ struct spawn_future_completion_signatures<
   using exception_signature = set_error_t(std::exception_ptr);
   using signature_list = unique_type_list_t<concat_type_lists_t<
       type_list<set_stopped_t()>,
-      spawn_future_maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
-                                         completion_signatures<Signatures...>>,
-                                     exception_signature>,
-      type_list<spawn_future_decayed_signature_t<Signatures>...>>>;
+      maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
+                            completion_signatures<Signatures...>>,
+                        exception_signature>,
+      type_list<decayed_completion_signature_t<Signatures>...>>>;
   using type = completion_signatures_from_type_list_t<signature_list>;
 };
 

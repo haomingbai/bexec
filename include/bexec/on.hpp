@@ -120,62 +120,6 @@ class starts_on_child_receiver {
   Operation* operation_;
 };
 
-template <class Tuple>
-struct value_completion {
-  explicit value_completion(Tuple tuple) : values(std::move(tuple)) {}
-  Tuple values;
-};
-
-template <class Error>
-struct error_completion {
-  explicit error_completion(Error error_value)
-      : error(std::move(error_value)) {}
-  Error error;
-};
-
-struct stopped_completion {};
-
-template <class Signature>
-struct completion_variant_alternative {
-  using type = type_list<>;
-};
-
-template <class... Args>
-struct completion_variant_alternative<set_value_t(Args...)> {
-  using type = type_list<value_completion<decayed_tuple<Args...>>>;
-};
-
-template <class Error>
-struct completion_variant_alternative<set_error_t(Error)> {
-  using type = type_list<error_completion<std::decay_t<Error>>>;
-};
-
-template <>
-struct completion_variant_alternative<set_stopped_t()> {
-  using type = type_list<stopped_completion>;
-};
-
-template <class Completions>
-struct completion_variant_type_list;
-
-template <class... Signatures>
-struct completion_variant_type_list<completion_signatures<Signatures...>> {
-  using type = unique_type_list_t<concat_type_lists_t<
-      typename completion_variant_alternative<Signatures>::type...>>;
-};
-
-template <class List>
-struct variant_from_completion_alternatives;
-
-template <class... Alternatives>
-struct variant_from_completion_alternatives<type_list<Alternatives...>> {
-  using type = std::variant<Alternatives...>;
-};
-
-template <class Completions>
-using completion_variant_t = typename variant_from_completion_alternatives<
-    typename completion_variant_type_list<Completions>::type>::type;
-
 template <class Receiver>
 using receiver_scheduler_t = remove_cvref_t<decltype(bexec::get_scheduler(
     bexec::get_env(std::declval<Receiver&>())))>;

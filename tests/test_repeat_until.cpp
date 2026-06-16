@@ -62,7 +62,7 @@ void test_repeat_until() {
     auto sender = bexec::repeat_until(
         [&] {
           return bexec::schedule(loop.get_scheduler()) |
-                 bexec::then([&] { ++count; });
+                 bexec::then([&] { return ++count; });
         },
         [&] { return count == 5; });
 
@@ -74,6 +74,36 @@ void test_repeat_until() {
     loop.run();
     CHECK(count == 5);
     CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 5);
+  }
+
+  {
+    int count = 0;
+    auto sender = bexec::repeat_until(
+        [&] { return bexec::just(++count); }, [&] { return count == 4; });
+
+    auto state = std::make_shared<shared_state>();
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+    bexec::start(operation);
+
+    CHECK(count == 4);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 4);
+  }
+
+  {
+    int count = 0;
+    auto sender = bexec::repeat_until(
+        [&] { return bexec::just(std::make_unique<int>(++count)); },
+        [&] { return count == 2; });
+
+    auto state = std::make_shared<shared_state>();
+    auto operation = bexec::connect(std::move(sender), any_receiver{state});
+    bexec::start(operation);
+
+    CHECK(count == 2);
+    CHECK(state->signal == signal_kind::value);
+    CHECK(state->int_value == 2);
   }
 
   {

@@ -139,8 +139,8 @@ loop.run();
 - Scheduler customization is member-only: `scheduler.schedule()`.
 - `repeat_until(factory, predicate)` uses a sender-producing factory. Reusing
   the same operation state across iterations is intentionally not supported.
-- `repeat_until` discards child values and completes with `set_value()` when
-  the predicate returns true.
+- `repeat_until` stores the most recent child value and forwards it when the
+  predicate returns true.
 - `when_all()` and `when_all_with_variant()` require at least one child sender.
 - Plain `when_all` requires each child to have at most one value completion
   alternative. Use `when_all_with_variant` when a child has multiple possible

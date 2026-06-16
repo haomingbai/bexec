@@ -110,7 +110,8 @@ auto s = bexec::when_all_with_variant(maybe_int_or_string(), bexec::just(3));
 
 `repeat_until(factory, predicate)` repeatedly creates and starts a fresh child
 sender. After each successful child completion, `predicate()` is called. When the
-predicate returns `true`, the repeat sender completes with `set_value()`.
+predicate returns `true`, the repeat sender forwards the most recent child value
+with `set_value(args...)`.
 
 ### Execution Model
 
@@ -127,7 +128,7 @@ flowchart TD
     SYNC -->|no| WAIT["wait for async callback"]
     WAIT --> PRED
 
-    PRED -->|true| DONE["set_value() ✨"]
+    PRED -->|true| DONE["set_value(args...) ✨"]
     PRED -->|false| CHECK_STOP
 
     START_CHILD -.->|error| ERROR["set_error(e) ❌"]
@@ -139,23 +140,27 @@ int count = 0;
 
 auto repeated = bexec::repeat_until(
     [&] {
-        return bexec::just() | bexec::then([&] { ++count; });
+        return bexec::just(++count);
     },
     [&] { return count == 10; });
 
 auto op = bexec::connect(std::move(repeated), receiver{});
 bexec::start(op);
-// After 10 iterations, receiver receives set_value()
+// After 10 iterations, receiver receives set_value(10)
 ```
 
 ### Design Notes
 
-Child values are discarded. The factory form is intentional: it avoids restarting
-the same operation state (which would be invalid for many senders), and works for
-move-only senders.
+Child values are stored until the predicate decides whether the loop is done. If
+the predicate returns `true`, the stored value from that iteration is forwarded
+to the downstream receiver. The factory form is intentional: it avoids
+restarting the same operation state (which would be invalid for many senders),
+and works for move-only senders.
 
-The implementation uses a trampoline so synchronous children such as `just()` do
-not recursively call `start()` and do not grow the stack per iteration.
+The implementation uses an epoch counter to coordinate the thread returning from
+`start(child_op)` with the thread running the child completion callback. This
+keeps synchronous children such as `just()` from recursively growing the stack,
+while still allowing asynchronous completions to continue the loop.
 
 ### Error and Stop Propagation
 

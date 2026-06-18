@@ -62,6 +62,7 @@ class run_loop {
         head_.load(std::memory_order_acquire);
     assert(head == nullptr || head == detail::run_loop_closed_stack());
     assert(state_.load(std::memory_order_acquire) != run_loop_state::running);
+    (void)head;
   }
 
   [[nodiscard]] scheduler get_scheduler() noexcept;
@@ -176,6 +177,7 @@ class run_loop {
         state, run_loop_state::finished, std::memory_order_acq_rel,
         std::memory_order_acquire);
     assert(exchanged);
+    (void)exchanged;
     return true;
   }
 

@@ -1,5 +1,5 @@
 /**
- * @file tests/test_then.cpp
+ * @file tests/basic/then.cpp
  * @brief Tests the then sender adaptor.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -24,7 +24,7 @@
 
 namespace bexec_tests {
 
-void test_then() {
+BEXEC_TEST_CASE(then_completion_transformations, basic) {
   {
     auto state = std::make_shared<shared_state>();
     bool called = false;

@@ -1,5 +1,5 @@
 /**
- * @file tests/test_just.cpp
+ * @file tests/basic/just.cpp
  * @brief Tests synchronous just-family senders.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -22,7 +22,7 @@
 
 namespace bexec_tests {
 
-void test_just() {
+BEXEC_TEST_CASE(just_completion_paths, basic) {
   {
     auto state = std::make_shared<shared_state>();
     auto operation = bexec::connect(bexec::just(std::make_unique<int>(42)),

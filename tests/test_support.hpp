@@ -18,26 +18,56 @@
 #define BEXEC_TESTS_TEST_SUPPORT_HPP_
 
 #include <concepts>
+#include <cstddef>
 #include <exception>
+#include <functional>
 #include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <type_traits>
 #include <utility>
+#include <vector>
 
 namespace bexec_tests {
 
 extern int failures;
+extern std::string_view current_test_case;
 
 #define CHECK(EXPR)                                                        \
   do {                                                                     \
     if (!(EXPR)) {                                                         \
-      std::cerr << __FILE__ << ':' << __LINE__ << ": check failed: " #EXPR \
-                << '\n';                                                   \
+      std::cerr << __FILE__ << ':' << __LINE__ << ": check failed in "     \
+                << ::bexec_tests::current_test_case << ": " #EXPR << '\n'; \
       ++::bexec_tests::failures;                                           \
     }                                                                      \
   } while (false)
+
+enum class test_category { basic, integration, stress };
+
+struct registered_test {
+  std::string_view name;
+  test_category category;
+  void (*function)();
+};
+
+class test_registration {
+ public:
+  test_registration(std::string_view name, test_category category,
+                    void (*function)());
+};
+
+const std::vector<registered_test>& registered_tests();
+std::string_view category_name(test_category category) noexcept;
+std::optional<test_category> parse_category(std::string_view value) noexcept;
+int stress_iterations(int base_iterations);
+
+#define BEXEC_TEST_CASE(NAME, CATEGORY)                              \
+  static void NAME();                                                \
+  static const ::bexec_tests::test_registration NAME##_registration{ \
+      #NAME, ::bexec_tests::test_category::CATEGORY, &NAME};         \
+  static void NAME()
 
 enum class signal_kind { none, value, error, stopped };
 
@@ -106,19 +136,6 @@ struct variant_receiver {
 
   void set_stopped() noexcept { state->signal = signal_kind::stopped; }
 };
-
-void test_concepts();
-void test_completion_signatures();
-void test_counting_scope();
-void test_env();
-void test_just();
-void test_let();
-void test_repeat_until();
-void test_scheduler();
-void test_stop_token();
-void test_task();
-void test_then();
-void test_when_all();
 
 }  // namespace bexec_tests
 #endif  // BEXEC_TESTS_TEST_SUPPORT_HPP_

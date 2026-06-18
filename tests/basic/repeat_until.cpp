@@ -1,5 +1,5 @@
 /**
- * @file tests/test_repeat_until.cpp
+ * @file tests/basic/repeat_until.cpp
  * @brief Tests the repeat_until sender algorithm.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -27,7 +27,7 @@
 
 namespace bexec_tests {
 
-void test_repeat_until() {
+BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
   {
     int count = 0;
     auto sender = bexec::repeat_until(
@@ -79,8 +79,8 @@ void test_repeat_until() {
 
   {
     int count = 0;
-    auto sender = bexec::repeat_until(
-        [&] { return bexec::just(++count); }, [&] { return count == 4; });
+    auto sender = bexec::repeat_until([&] { return bexec::just(++count); },
+                                      [&] { return count == 4; });
 
     auto state = std::make_shared<shared_state>();
     auto operation = bexec::connect(std::move(sender), any_receiver{state});

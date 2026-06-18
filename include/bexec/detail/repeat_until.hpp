@@ -169,7 +169,7 @@ class repeat_until_operation {
     assert(stored_.has_value());
     bool should_continue = std::visit(
         [this](auto& completion) noexcept -> bool {
-          return process_one(completion);
+          return this->process_one(completion);
         },
         *stored_);
     if (should_continue) {

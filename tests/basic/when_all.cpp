@@ -1,5 +1,5 @@
 /**
- * @file tests/test_when_all.cpp
+ * @file tests/basic/when_all.cpp
  * @brief Tests the when_all sender algorithm.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -285,7 +285,7 @@ struct two_variant_receiver {
 
 }  // namespace
 
-void test_when_all() {
+BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
   static_assert(!std::is_invocable_v<decltype(bexec::when_all)>);
 
   {

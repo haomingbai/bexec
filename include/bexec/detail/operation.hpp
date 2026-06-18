@@ -18,6 +18,7 @@
 #define BEXEC_INCLUDE_BEXEC_DETAIL_OPERATION_HPP_
 
 #include <bexec/operation_state.hpp>
+#include <functional>
 #include <utility>
 
 namespace bexec::detail {

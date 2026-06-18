@@ -1,5 +1,5 @@
 /**
- * @file tests/test_stop_token.cpp
+ * @file tests/stress/stop_token_races.cpp
  * @brief Tests inplace stop-token primitives.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -32,7 +32,7 @@ void wait_until(const std::atomic_bool& flag) {
 
 }  // namespace
 
-void test_stop_token() {
+BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
   bexec::inplace_stop_source source;
   auto token = source.get_token();
 
@@ -99,7 +99,7 @@ void test_stop_token() {
   }
 
   {
-    constexpr int iterations = 2000;
+    const int iterations = stress_iterations(2000);
 
     for (int iteration = 0; iteration != iterations; ++iteration) {
       bexec::inplace_stop_source race_source;

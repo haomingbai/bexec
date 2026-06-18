@@ -1,5 +1,5 @@
 /**
- * @file tests/test_concepts.cpp
+ * @file tests/basic/concepts.cpp
  * @brief Tests the public concept vocabulary.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -28,7 +28,7 @@
 
 namespace bexec_tests {
 
-void test_concepts() {
+BEXEC_TEST_CASE(vocabulary_concept_contracts, basic) {
   static_assert(bexec::sender<decltype(bexec::just(1))>);
 
   auto state = std::make_shared<shared_state>();

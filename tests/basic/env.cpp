@@ -1,5 +1,5 @@
 /**
- * @file tests/test_env.cpp
+ * @file tests/basic/env.cpp
  * @brief Tests receiver environment and query behavior.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -73,7 +73,7 @@ struct allocator_env {
   }
 };
 
-void test_env() {
+BEXEC_TEST_CASE(environment_query_contracts, basic) {
   auto fallback_allocator =
       bexec::query(bexec::empty_env{}, bexec::get_allocator);
   static_assert(

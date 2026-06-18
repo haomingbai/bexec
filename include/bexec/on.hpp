@@ -421,8 +421,9 @@ class on_sender {
     }
 
     void deliver_stored() noexcept {
-      std::visit([this](auto& completion) noexcept { deliver_one(completion); },
-                 *stored_);
+      std::visit(
+          [this](auto& completion) noexcept { this->deliver_one(completion); },
+          *stored_);
     }
 
     template <class Tuple>

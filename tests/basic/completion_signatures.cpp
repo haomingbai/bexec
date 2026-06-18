@@ -1,5 +1,5 @@
 /**
- * @file tests/test_completion_signatures.cpp
+ * @file tests/basic/completion_signatures.cpp
  * @brief Tests completion-signature metadata helpers.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -95,7 +95,7 @@ struct env_dependent_sender {
 
 }  // namespace
 
-void test_completion_signatures() {
+BEXEC_TEST_CASE(completion_signature_contracts, basic) {
   using just_int = decltype(bexec::just(1));
   static_assert(!bexec::sender<int>);
   static_assert(

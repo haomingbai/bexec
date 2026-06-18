@@ -1,5 +1,5 @@
 /**
- * @file tests/test_counting_scope.cpp
+ * @file tests/basic/counting_scope.cpp
  * @brief Tests standard-style counting scopes and detached spawn.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-22
@@ -309,7 +309,7 @@ auto connect_join(bexec::counting_scope& scope, Receiver receiver) {
 
 }  // namespace
 
-void test_counting_scope() {
+BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
   {
     bexec::simple_counting_scope scope;
     bexec::run_loop loop;

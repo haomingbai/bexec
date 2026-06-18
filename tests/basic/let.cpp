@@ -1,5 +1,5 @@
 /**
- * @file tests/test_let.cpp
+ * @file tests/basic/let.cpp
  * @brief Tests the let sender adaptors.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-15
@@ -67,7 +67,7 @@ class non_movable_value_sender {
 
 }  // namespace
 
-void test_let() {
+BEXEC_TEST_CASE(let_replacement_paths, basic) {
   {
     auto state = std::make_shared<shared_state>();
     auto sender = bexec::let_value(

@@ -368,7 +368,7 @@ class simple_counting_scope::join_sender {
       : scope_(&scope) {}
 
   template <class Receiver>
-  class operation : private detail::scope_join_waiter {
+  class operation final : private detail::scope_join_waiter {
    public:
     template <class Operation>
     class final_receiver {

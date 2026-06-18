@@ -72,6 +72,26 @@ cmake --build build
 ctest --test-dir build --output-on-failure
 ```
 
+Tests are built as feature targets rather than one monolithic executable.
+CTest registers `basic`, `integration`, and `stress` runs inside every feature:
+the corresponding sources live under `tests/basic/`, `tests/integration/`,
+and `tests/stress/`.
+
+```sh
+# Build all feature tests and independent-header compile checks.
+cmake --build build --target bexec_tests
+
+# Run all cases for one feature.
+ctest --test-dir build -L run_loop --output-on-failure
+
+# Run the bounded stress cases for every feature.
+ctest --test-dir build -L stress --output-on-failure
+
+# Increase stress iterations by a factor from 1 through 100.
+BEXEC_STRESS_MULTIPLIER=10 \
+  ctest --test-dir build -L stress --output-on-failure
+```
+
 The project builds tests and examples by default. Disable them with:
 
 ```sh

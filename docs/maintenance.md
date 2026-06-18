@@ -12,9 +12,12 @@
 - `include/bexec/*.hpp`: other public feature headers.
 - `include/bexec/detail/*.hpp`: implementation helpers that are not part of
   the public API contract.
-- `tests/test_main.cpp`: CTest executable entry point.
-- `tests/test_support.hpp`: shared test receiver and assertion helpers.
-- `tests/test_*.cpp`: one feature module per test file.
+- `tests/basic/`: deterministic component and completion-contract tests.
+- `tests/integration/`: multi-component usage scenarios.
+- `tests/stress/`: concurrency, lifecycle, and high-iteration tests.
+- `tests/test_runner.cpp`: shared entry point for every feature executable.
+- `tests/test_support.*` and focused helper headers: shared assertions,
+  registration, test senders, and stress controls.
 - `examples/`: one compiled example case per feature area.
 - `docs/`: usage, design, maintenance, and roadmap documentation.
 
@@ -176,6 +179,70 @@ Every new feature should include tests for:
 - synchronous completion if the feature can be used with `just`,
 - scheduler-based asynchronous completion when practical.
 
+Tests are organized by feature target, not by test category. A feature target
+must source its cases from `tests/basic/`, `tests/integration/`, and
+`tests/stress/`. CTest labels allow either dimension to be selected:
+
+```sh
+ctest --test-dir build -L when_all
+ctest --test-dir build -L integration
+BEXEC_STRESS_MULTIPLIER=10 ctest --test-dir build -L stress
+```
+
+Stress tests must be bounded at the default multiplier and scale their loop
+counts through `stress_iterations()`. Keep operation timeouts finite and avoid
+sleep-based synchronization when an atomic handshake or scheduler completion
+can express the same condition.
+
+All headers under `include/bexec/` are compiled in independent translation
+units by the `bexec_header_self_contained` target. A header must include every
+standard and project dependency required by its own declarations.
+
+### Regression Tests
+
+Every defect fix must include a regression test that fails against the broken
+implementation and passes with the fix. Put the case in the feature target
+that owns the behavior, under the directory that reproduces the defect:
+
+- `basic` for deterministic component behavior,
+- `integration` for a multi-component usage scenario,
+- `stress` for races, timing-sensitive failures, or load-dependent defects.
+
+Do not accept a defect fix justified only by inspection or by an unrelated
+existing test. Keep the regression test after the fix to prevent recurrence.
+
+### Continuous Integration And Coverage
+
+`.github/workflows/ci.yml` runs the complete suite and repeated high-stress
+tests on GitHub-hosted Linux and macOS runners. Windows is intentionally not
+part of the current CI matrix because its hosted-runner execution cost is too
+high for this project.
+
+The Linux coverage job builds with GCC coverage instrumentation, runs all
+feature tests, writes a Markdown summary to the GitHub Actions job summary, and
+uploads the detailed report as an artifact. Coverage is informational:
+
+- there is no required percentage,
+- coverage changes do not fail CI,
+- uncovered lines should guide review and future tests rather than become a
+  numeric acceptance gate.
+
+Generate the same report locally with:
+
+```sh
+cmake -S . -B build-coverage \
+  -DBEXEC_BUILD_EXAMPLES=OFF \
+  -DCMAKE_BUILD_TYPE=Debug \
+  -DCMAKE_CXX_FLAGS="--coverage -O0 -g" \
+  -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+cmake --build build-coverage --target bexec_tests
+ctest --test-dir build-coverage --output-on-failure
+python3 scripts/coverage_summary.py \
+  --build-dir build-coverage \
+  --source-root include/bexec \
+  --output-dir coverage
+```
+
 For adaptors and algorithms, add at least one test that composes with another
 sender/adaptor.
 
@@ -204,6 +271,6 @@ Before considering a change complete:
 
 ```sh
 cmake -S . -B build
-cmake --build build
+cmake --build build --target bexec_tests
 ctest --test-dir build --output-on-failure
 ```

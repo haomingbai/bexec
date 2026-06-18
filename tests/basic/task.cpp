@@ -1,5 +1,5 @@
 /**
- * @file tests/test_task.cpp
+ * @file tests/basic/task.cpp
  * @brief Tests coroutine task support.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
@@ -28,7 +28,7 @@ bexec::task<void> lazy_void(bool& ran) {
 
 }  // namespace
 
-void test_task() {
+BEXEC_TEST_CASE(task_lazy_value_and_void_behavior, basic) {
   auto value_task = lazy_value();
 
   CHECK(!value_task.done());

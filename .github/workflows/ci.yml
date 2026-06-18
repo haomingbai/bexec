@@ -1,0 +1,92 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  high-stress:
+    name: High stress (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    env:
+      BEXEC_STRESS_MULTIPLIER: 25
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Configure
+        run: >
+          cmake -S . -B build
+          -DCMAKE_BUILD_TYPE=RelWithDebInfo
+          -DBEXEC_BUILD_EXAMPLES=OFF
+
+      - name: Build feature tests and header checks
+        run: cmake --build build --target bexec_tests --parallel 2
+
+      - name: Run complete test suite
+        run: ctest --test-dir build --output-on-failure --parallel 2
+
+      - name: Repeat high-stress tests
+        run: >
+          ctest --test-dir build
+          --label-regex stress
+          --repeat until-fail:3
+          --output-on-failure
+          --parallel 2
+
+  coverage:
+    name: Coverage report (Linux)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v5
+
+      - name: Configure coverage build
+        run: >
+          cmake -S . -B build-coverage
+          -DCMAKE_BUILD_TYPE=Debug
+          -DBEXEC_BUILD_EXAMPLES=OFF
+          -DCMAKE_CXX_FLAGS="--coverage -O0 -g"
+          -DCMAKE_EXE_LINKER_FLAGS="--coverage"
+
+      - name: Build feature tests and header checks
+        run: cmake --build build-coverage --target bexec_tests --parallel 2
+
+      - name: Run tests for coverage
+        run: ctest --test-dir build-coverage --output-on-failure --parallel 2
+
+      - name: Generate coverage summary
+        run: >
+          python3 scripts/coverage_summary.py
+          --build-dir build-coverage
+          --source-root include/bexec
+          --output-dir coverage
+
+      - name: Add coverage to job summary
+        run: cat coverage/coverage-summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        with:
+          name: linux-gcc-coverage
+          path: coverage/
+          if-no-files-found: error
+          retention-days: 14

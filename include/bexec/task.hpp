@@ -1,15 +1,11 @@
 /**
  * @file include/bexec/task.hpp
- * @brief Small lazy coroutine task type.
+ * @brief Lazy coroutine task with sender awaiting support.
  * @author Haoming Bai <haomingbai@hotmail.com>
- * @date   2026-05-12
+ * @date   2026-06-22
  *
  * Copyright © 2026 Haoming Bai
  * SPDX-License-Identifier: MIT
- *
- * @details
- * Defines task<T> and task<void> for examples and tests, including stored
- * result and exception handling.
  */
 
 #pragma once
@@ -17,6 +13,7 @@
 #ifndef BEXEC_INCLUDE_BEXEC_TASK_HPP_
 #define BEXEC_INCLUDE_BEXEC_TASK_HPP_
 
+#include <bexec/awaitable.hpp>
 #include <bexec/detail/config.hpp>
 #include <cassert>
 #include <coroutine>
@@ -27,10 +24,96 @@
 namespace bexec {
 
 /**
- * @brief Coroutine task type used by bexec examples and tests.
- *
- * The task is lazy: call start() to run until the first suspension. result()
- * consumes the stored result after done() is true.
+ * @brief Thrown by task::result() when the task completed with stopped.
+ */
+class task_stopped : public std::exception {
+ public:
+  [[nodiscard]] const char* what() const noexcept override {
+    return "bexec task stopped";
+  }
+};
+
+namespace detail {
+
+template <class Promise>
+class task_final_awaiter {
+ public:
+  [[nodiscard]] bool await_ready() const noexcept { return false; }
+
+  std::coroutine_handle<> await_suspend(
+      std::coroutine_handle<Promise> handle) const noexcept {
+    return handle.promise().continuation();
+  }
+
+  void await_resume() const noexcept {}
+};
+
+template <class Promise>
+class task_awaiter {
+ public:
+  using handle_type = std::coroutine_handle<Promise>;
+
+  explicit task_awaiter(handle_type handle) noexcept : handle_(handle) {}
+
+  task_awaiter(const task_awaiter&) = delete;
+  task_awaiter& operator=(const task_awaiter&) = delete;
+  task_awaiter(task_awaiter&&) = delete;
+  task_awaiter& operator=(task_awaiter&&) = delete;
+
+  ~task_awaiter() {
+    if (handle_) {
+      handle_.destroy();
+    }
+  }
+
+  [[nodiscard]] bool await_ready() const noexcept {
+    return !handle_ || handle_.done();
+  }
+
+  template <class ParentPromise>
+  std::coroutine_handle<> await_suspend(
+      std::coroutine_handle<ParentPromise> parent) noexcept {
+    if (handle_.promise().stopped()) {
+      if constexpr (requires {
+                      {
+                        parent.promise().unhandled_stopped()
+                      } -> std::convertible_to<std::coroutine_handle<>>;
+                    }) {
+        return static_cast<std::coroutine_handle<>>(
+            parent.promise().unhandled_stopped());
+      } else {
+        assert(false);
+        BEXEC_DETAIL_UNREACHABLE();
+      }
+    }
+
+    handle_.promise().set_continuation(parent);
+    return handle_;
+  }
+
+  decltype(auto) await_resume() {
+    return handle_.promise().consume_await_result();
+  }
+
+ private:
+  handle_type handle_;
+};
+
+template <class Promise>
+void store_task_exception(Promise& promise) noexcept {
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+  promise.error_ = std::current_exception();
+#else
+  (void)promise;
+  assert(false);
+  BEXEC_DETAIL_UNREACHABLE();
+#endif
+}
+
+}  // namespace detail
+
+/**
+ * @brief Lazy, move-only coroutine task.
  */
 template <class T>
 class task {
@@ -38,32 +121,76 @@ class task {
   struct promise_type;
   using handle_type = std::coroutine_handle<promise_type>;
 
-  struct promise_type {
-    std::optional<T> value;
-    std::exception_ptr error;
+  struct promise_type : with_awaitable_senders<promise_type> {
+    using awaitable_base = with_awaitable_senders<promise_type>;
 
-    task get_return_object() { return task{handle_type::from_promise(*this)}; }
+    task get_return_object() noexcept {
+      return task{handle_type::from_promise(*this)};
+    }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }
-    std::suspend_always final_suspend() noexcept { return {}; }
+    std::suspend_always initial_suspend() const noexcept { return {}; }
+    detail::task_final_awaiter<promise_type> final_suspend() const noexcept {
+      return {};
+    }
 
     template <class U>
     void return_value(U&& result) {
-      value.emplace(std::forward<U>(result));
+      value_.emplace(std::forward<U>(result));
     }
 
-    void unhandled_exception() noexcept {
+    void unhandled_exception() noexcept { detail::store_task_exception(*this); }
+
+    [[nodiscard]] bool stopped() const noexcept { return stopped_; }
+
+    [[nodiscard]] std::coroutine_handle<> unhandled_stopped() noexcept {
+      stopped_ = true;
+      if (this->continuation() == std::noop_coroutine()) {
+        return std::noop_coroutine();
+      }
+      return awaitable_base::unhandled_stopped();
+    }
+
+    T consume_result() {
+      rethrow_error();
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      error = std::current_exception();
+      if (stopped_) {
+        throw task_stopped{};
+      }
 #else
-      assert(false);
-      BEXEC_DETAIL_UNREACHABLE();
+      assert(!stopped_);
+#endif
+      assert(value_.has_value());
+      return std::move(*value_);
+    }
+
+    T consume_await_result() {
+      rethrow_error();
+      assert(!stopped_);
+      assert(value_.has_value());
+      return std::move(*value_);
+    }
+
+   private:
+    void rethrow_error() {
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+      if (error_) {
+        std::rethrow_exception(error_);
+      }
+#else
+      assert(!error_);
 #endif
     }
+
+    friend void detail::store_task_exception<promise_type>(
+        promise_type&) noexcept;
+
+    std::optional<T> value_;
+    std::exception_ptr error_;
+    bool stopped_{false};
   };
 
-  task() = default;
-  explicit task(handle_type handle) : handle_(handle) {}
+  task() noexcept = default;
+  explicit task(handle_type handle) noexcept : handle_(handle) {}
 
   task(const task&) = delete;
   task& operator=(const task&) = delete;
@@ -72,43 +199,49 @@ class task {
 
   task& operator=(task&& other) noexcept {
     if (this != &other) {
-      if (handle_) {
-        handle_.destroy();
-      }
+      destroy();
       handle_ = std::exchange(other.handle_, {});
     }
     return *this;
   }
 
-  ~task() {
-    if (handle_) {
-      handle_.destroy();
-    }
-  }
+  ~task() { destroy(); }
 
-  /** @brief Starts or resumes the coroutine. */
+  /**
+   * @brief Starts or manually resumes the task.
+   *
+   * A task waiting for a sender or child task is resumed by that operation and
+   * must not be manually resumed.
+   */
   void start() {
-    if (handle_ && !handle_.done()) {
+    if (handle_ && !done()) {
       handle_.resume();
     }
   }
 
-  /** @brief Returns true when the coroutine reached final suspend. */
   [[nodiscard]] bool done() const noexcept {
-    return !handle_ || handle_.done();
+    return !handle_ || handle_.done() || handle_.promise().stopped();
   }
 
-  /** @brief Returns the result, rethrowing any stored exception. */
   T result() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    if (handle_.promise().error) {
-      std::rethrow_exception(handle_.promise().error);
-    }
-#endif
-    return std::move(*handle_.promise().value);
+    assert(handle_);
+    assert(done());
+    return handle_.promise().consume_result();
+  }
+
+  detail::task_awaiter<promise_type> operator co_await() && noexcept {
+    return detail::task_awaiter<promise_type>{
+        std::exchange(handle_, handle_type{})};
   }
 
  private:
+  void destroy() noexcept {
+    if (handle_) {
+      handle_.destroy();
+      handle_ = {};
+    }
+  }
+
   handle_type handle_{};
 };
 
@@ -121,27 +254,68 @@ class task<void> {
   struct promise_type;
   using handle_type = std::coroutine_handle<promise_type>;
 
-  struct promise_type {
-    std::exception_ptr error;
+  struct promise_type : with_awaitable_senders<promise_type> {
+    using awaitable_base = with_awaitable_senders<promise_type>;
 
-    task get_return_object() { return task{handle_type::from_promise(*this)}; }
+    task get_return_object() noexcept {
+      return task{handle_type::from_promise(*this)};
+    }
 
-    std::suspend_always initial_suspend() noexcept { return {}; }
-    std::suspend_always final_suspend() noexcept { return {}; }
-    void return_void() noexcept {}
+    std::suspend_always initial_suspend() const noexcept { return {}; }
+    detail::task_final_awaiter<promise_type> final_suspend() const noexcept {
+      return {};
+    }
 
-    void unhandled_exception() noexcept {
+    void return_void() const noexcept {}
+
+    void unhandled_exception() noexcept { detail::store_task_exception(*this); }
+
+    [[nodiscard]] bool stopped() const noexcept { return stopped_; }
+
+    [[nodiscard]] std::coroutine_handle<> unhandled_stopped() noexcept {
+      stopped_ = true;
+      if (this->continuation() == std::noop_coroutine()) {
+        return std::noop_coroutine();
+      }
+      return awaitable_base::unhandled_stopped();
+    }
+
+    void consume_result() {
+      rethrow_error();
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      error = std::current_exception();
+      if (stopped_) {
+        throw task_stopped{};
+      }
 #else
-      assert(false);
-      BEXEC_DETAIL_UNREACHABLE();
+      assert(!stopped_);
 #endif
     }
+
+    void consume_await_result() {
+      rethrow_error();
+      assert(!stopped_);
+    }
+
+   private:
+    void rethrow_error() {
+#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
+      if (error_) {
+        std::rethrow_exception(error_);
+      }
+#else
+      assert(!error_);
+#endif
+    }
+
+    friend void detail::store_task_exception<promise_type>(
+        promise_type&) noexcept;
+
+    std::exception_ptr error_;
+    bool stopped_{false};
   };
 
-  task() = default;
-  explicit task(handle_type handle) : handle_(handle) {}
+  task() noexcept = default;
+  explicit task(handle_type handle) noexcept : handle_(handle) {}
 
   task(const task&) = delete;
   task& operator=(const task&) = delete;
@@ -150,42 +324,43 @@ class task<void> {
 
   task& operator=(task&& other) noexcept {
     if (this != &other) {
-      if (handle_) {
-        handle_.destroy();
-      }
+      destroy();
       handle_ = std::exchange(other.handle_, {});
     }
     return *this;
   }
 
-  ~task() {
-    if (handle_) {
-      handle_.destroy();
-    }
-  }
+  ~task() { destroy(); }
 
-  /** @brief Starts or resumes the coroutine. */
   void start() {
-    if (handle_ && !handle_.done()) {
+    if (handle_ && !done()) {
       handle_.resume();
     }
   }
 
-  /** @brief Returns true when the coroutine reached final suspend. */
   [[nodiscard]] bool done() const noexcept {
-    return !handle_ || handle_.done();
+    return !handle_ || handle_.done() || handle_.promise().stopped();
   }
 
-  /** @brief Rethrows any stored exception. */
   void result() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    if (handle_.promise().error) {
-      std::rethrow_exception(handle_.promise().error);
-    }
-#endif
+    assert(handle_);
+    assert(done());
+    handle_.promise().consume_result();
+  }
+
+  detail::task_awaiter<promise_type> operator co_await() && noexcept {
+    return detail::task_awaiter<promise_type>{
+        std::exchange(handle_, handle_type{})};
   }
 
  private:
+  void destroy() noexcept {
+    if (handle_) {
+      handle_.destroy();
+      handle_ = {};
+    }
+  }
+
   handle_type handle_{};
 };
 

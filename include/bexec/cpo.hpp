@@ -10,7 +10,7 @@
  * @details
  * Re-exports the member-based customization point objects for starting
  * operations, connecting senders, delivering receiver completions,
- * scheduling, and querying environments.
+ * scheduling, querying environments, and adapting senders to awaitables.
  */
 
 #pragma once
@@ -18,6 +18,7 @@
 #ifndef BEXEC_INCLUDE_BEXEC_CPO_HPP_
 #define BEXEC_INCLUDE_BEXEC_CPO_HPP_
 
+#include <bexec/awaitable.hpp>
 #include <bexec/operation_state.hpp>
 #include <bexec/query.hpp>
 #include <bexec/receiver.hpp>

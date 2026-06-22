@@ -376,8 +376,8 @@ struct spawn_future_all_nothrow_decay;
 
 template <class... Signatures>
 struct spawn_future_all_nothrow_decay<completion_signatures<Signatures...>>
-    : std::bool_constant<(
-          completion_signature_nothrow_decay_v<Signatures> && ...)> {};
+    : std::bool_constant<(completion_signature_nothrow_decay_v<Signatures> &&
+                          ...)> {};
 
 template <class Completions>
 inline constexpr bool spawn_future_all_nothrow_decay_v =

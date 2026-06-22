@@ -53,7 +53,7 @@ graph TB
     end
 
     subgraph "Coroutines"
-        TASK["task<T>"]
+        TASK["task<T> / generator<T><br/>co_await sender"]
     end
 
     JUST --> THEN
@@ -103,7 +103,7 @@ bexec::start(op);
 | [concepts-and-metadata.md](concepts-and-metadata.md) | Concept constraints, completion signature introspection |
 | [algorithms.md](algorithms.md) | `when_all`, `when_all_with_variant`, `repeat_until` |
 | [counting-scopes.md](counting-scopes.md) | `counting_scope`, `simple_counting_scope`, `spawn`, `spawn_future` |
-| [coroutines.md](coroutines.md) | `task<T>` and `task<void>` coroutine tasks |
+| [coroutines.md](coroutines.md) | Sender awaiting, `task<T>`, and synchronous `generator<T>` |
 
 ## Other Documentation
 

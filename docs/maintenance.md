@@ -7,6 +7,8 @@
   pack and helper type-list utilities.
 - `include/bexec/operation_state.hpp`, `receiver.hpp`, `sender.hpp`,
   `scheduler.hpp`, and `query.hpp`: role-oriented public vocabulary headers.
+- `include/bexec/awaitable.hpp`, `task.hpp`, and `generator.hpp`: coroutine
+  bridge and coroutine-owned vocabulary types.
 - `include/bexec/cpo.hpp`: aggregate include for CPO entities only; keep
   feature implementations in their role or feature headers.
 - `include/bexec/*.hpp`: other public feature headers.

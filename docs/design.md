@@ -19,7 +19,7 @@ graph TB
         ADAPTORS["Adaptors<br/>then / upon_* / let_*<br/>into_variant / when_all<br/>repeat_until / starts_on / on"]
         SCHED["Scheduling<br/>run_loop / sync_wait"]
         SCOPES["Scopes<br/>counting_scope / spawn / spawn_future"]
-        TASK["Coroutines<br/>task&lt;T&gt;"]
+        TASK["Coroutines<br/>task&lt;T&gt; / generator&lt;T&gt;<br/>sender awaitables"]
     end
 
     subgraph "Internal Detail"
@@ -582,11 +582,46 @@ storage is no longer used.
 
 ## Coroutine Design
 
-`task<T>` is a lazy coroutine task. It starts when `start()` is called and
-stores either a result or an exception.
+`as_awaitable(value, promise)` preserves native awaitables and converts
+single-value senders into `sender_awaitable<Sender, Promise>`.
+`with_awaitable_senders<Promise>` supplies the promise `await_transform`,
+continuation storage, and stopped propagation hook.
 
-The coroutine support is intentionally scoped to a minimal task helper.
-Schedulers expose scheduling through `schedule(scheduler)`, not through
-awaiter member functions. Future sender-to-awaitable support should be built
-with an internal receiver that connects to a sender and resumes the coroutine
-from receiver completion signals.
+The continuation API is intentionally the one specified by
+[P2300R10's `execution::with_awaitable_senders`](https://www.open-std.org/jtc1/sc22/wg21/docs/papers/2024/p2300r10.html#exec.with.awaitable.senders);
+it is not extra state introduced solely for `bexec::task`.
+`set_continuation` records both the caller handle and a type-erased function
+that invokes the caller promise's `unhandled_stopped`.
+Consequently, a stopped sender transfers directly through the coroutine call
+chain without resuming coroutine bodies or becoming catchable by
+`catch (...)`. `task` adds only its root policy: recording a stopped result when
+there is no calling coroutine. For a non-task promise with no caller-side
+stopped handler, bexec uses its project-wide assert/unreachable failure
+convention where P2300 specifies termination.
+
+The awaitable receiver stores one pointer back to its owning awaitable. The
+awaiter stores the result slot, error, continuation, promise pointer, and child
+operation. The operation is initialized directly from
+`connect(sender, receiver{*this})`, which supports non-movable operation states
+without `manual_lifetime` or a separate allocation. Guaranteed copy elision
+constructs the non-movable awaitable directly in the coroutine frame.
+
+Successful sender completion supports no value, `set_value()`, or one
+`set_value(T)`. Multiple value alternatives and multi-argument value
+completions are rejected. Error values are converted to `exception_ptr`;
+stopped completion invokes `promise.unhandled_stopped()` and transfers to the
+stored continuation.
+
+`task<T>` remains lazy and retains `start()`, `done()`, and `result()`. Its
+promise inherits the sender-awaiting mixin, and rvalue tasks can be awaited by
+other tasks through symmetric continuation transfer. A task waiting for an
+asynchronous operation must remain alive and must not be manually resumed.
+Cancellation-owned lifetime is intentionally not implemented.
+
+`generator<T>` is a separate synchronous coroutine type. It is a move-only,
+single-pass input range using `default_sentinel_t`; each `co_yield` stores one
+`T` in the promise. It deliberately rejects `co_await`, avoiding an asynchronous
+readiness state that a normal input iterator cannot represent.
+
+No operation-specific allocation is performed by these helpers. Coroutine
+frame allocation remains controlled by the compiler and coroutine ABI.

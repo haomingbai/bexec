@@ -485,9 +485,8 @@ struct completion_variant_type_list<completion_signatures<Signatures...>> {
 };
 
 template <class Completions>
-using completion_variant_t =
-    variant_from_type_list_t<typename completion_variant_type_list<
-        Completions>::type>;
+using completion_variant_t = variant_from_type_list_t<
+    typename completion_variant_type_list<Completions>::type>;
 
 template <class List>
 struct value_variant_from_tuple_list;

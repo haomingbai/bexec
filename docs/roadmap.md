@@ -36,11 +36,10 @@ P2300-inspired library.
 
 ## Coroutines
 
-- Add receiver-based sender awaitable integration so scheduling can be written
-  as `co_await schedule(scheduler)`.
 - Decide whether `task<T>` should become a sender.
 - Add cancellation propagation into coroutine tasks.
-- Add async composition helpers.
+- Add asynchronous generator/stream composition if a real call site requires
+  an async iteration protocol.
 
 ## Allocators And ABI
 

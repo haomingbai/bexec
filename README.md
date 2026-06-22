@@ -52,7 +52,11 @@ environment queries, sender factories/adaptors, and focused tests.
   and `spawn_future` for scope-tracked eager work.
 - `bexec::this_thread::sync_wait(sender)` and
   `bexec::this_thread::sync_wait_with_variant(sender)`.
-- A small coroutine `task<T>` helper.
+- Coroutine integration:
+  - lazy, awaitable `task<T>` / `task<void>`;
+  - sender awaiting through `as_awaitable` and
+    `with_awaitable_senders<Promise>`;
+  - synchronous single-pass `generator<T>`.
 
 ## What It Is Not
 

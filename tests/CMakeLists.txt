@@ -118,6 +118,12 @@ bexec_add_feature_test(
     integration/task.cpp
     stress/task.cpp
 )
+bexec_add_feature_test(
+    generator
+    basic/generator.cpp
+    integration/generator.cpp
+    stress/generator.cpp
+)
 
 file(GLOB_RECURSE BEXEC_HEADERS CONFIGURE_DEPENDS
     "${PROJECT_SOURCE_DIR}/include/bexec/*.hpp"

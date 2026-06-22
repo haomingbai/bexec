@@ -228,8 +228,7 @@ class repeat_until_operation {
         break;
       }
 
-      const std::uint64_t child_epoch =
-          epoch_.load(std::memory_order_acquire);
+      const std::uint64_t child_epoch = epoch_.load(std::memory_order_acquire);
 
 #if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       try {

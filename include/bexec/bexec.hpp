@@ -9,7 +9,7 @@
  *
  * @details
  * Includes the public vocabulary, factories, adaptors, algorithms, stop-token
- * utilities, coroutine task, and run_loop scheduler headers.
+ * utilities, coroutine integration, and run_loop scheduler headers.
  */
 
 #pragma once
@@ -17,11 +17,13 @@
 #ifndef BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
 #define BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
 
+#include <bexec/awaitable.hpp>
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>
 #include <bexec/counting_scope.hpp>
 #include <bexec/cpo.hpp>
 #include <bexec/env.hpp>
+#include <bexec/generator.hpp>
 #include <bexec/into_variant.hpp>
 #include <bexec/just.hpp>
 #include <bexec/let.hpp>

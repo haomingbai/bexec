@@ -539,10 +539,37 @@ cancellation propagation.
 
 `simple_counting_scope` and `counting_scope` maintain an association count and
 a small state machine. `close()` prevents new associations, and `join()`
-completes after the count reaches zero. Starting a join does not close the
-scope; associations are still allowed while the scope is open and joining.
+completes after the count reaches zero. Starting a join does not immediately
+close a non-empty open scope; associations are still allowed while the scope is
+open and joining.
 `counting_scope` additionally owns an `inplace_stop_source`; its token wraps
 child senders so scope stop requests are visible through `get_stop_token`.
+
+The simple scope state is monotonic; `unused` is tracked as a separate flag
+instead of as a state value. `try_associate()` accepts only `open` and
+`open_joining`, which lets the implementation test association eligibility by
+state ordering. Open states never jump directly to `joined`: they first move to
+`closed_joining`, which prevents successful new associations, and only then
+recheck the count before completing the join. A closed scope whose count is
+already zero may move directly to `joined` because no new count can be added.
+
+```mermaid
+stateDiagram-v2
+    [*] --> open
+
+    open --> open_joining: join() started
+    open --> closed: close()
+    open_joining --> closed_joining: close() or count == 0
+    closed --> closed_joining: join() started and count > 0
+    closed --> joined: join() started and count == 0
+    closed_joining --> joined: count == 0
+
+    note right of open: try_associate succeeds
+    note right of open_joining: try_associate succeeds
+    note right of closed: try_associate fails
+    note right of closed_joining: join pending
+    note right of joined: join complete
+```
 
 Scope destruction is intentionally strict. Destroying a scope while it is open,
 closed-but-associated, or waiting for a join completion terminates the program.

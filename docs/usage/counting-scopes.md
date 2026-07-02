@@ -8,20 +8,17 @@ an association count; `counting_scope` adds cooperative cancellation via
 
 ```mermaid
 stateDiagram-v2
-    [*] --> unused
+    [*] --> open
 
-    state unused {
-        [*] --> open
-    }
-
-    open --> open_and_joining: join() started
+    open --> open_joining: join() started
     open --> closed: close()
-    closed --> closed_and_joining: join() started
+    open_joining --> closed_joining: close() or count == 0
+    closed --> closed_joining: join() started and count > 0
+    closed --> joined: join() started and count == 0
+    closed_joining --> joined: count == 0
 
-    open_and_joining --> joined: count → 0
-    closed_and_joining --> joined: count → 0
-
-    note right of open: Can accept work<br/>(try_associate succeeds)
+    note right of open: Can accept work
+    note right of open_joining: Can accept work while join waits
     note right of closed: New work rejected<br/>Existing work still valid
     note right of joined: Scope can be safely destroyed
 
@@ -131,8 +128,9 @@ Prevents new associations. Existing work remains valid.
 ### `join()`
 
 Returns a sender that completes when the association count reaches zero. Starting
-a join does **not** by itself close the scope to new work — call `close()`
-explicitly if you want to prevent new associations.
+a join does **not** immediately close a non-empty open scope to new work; the
+scope still accepts associations while it is `open_joining`. Once the count
+reaches zero, the join path closes the scope before completing.
 
 ```cpp
 scope.close();
@@ -144,7 +142,8 @@ environment; `this_thread::sync_wait(scope.join())` satisfies this requirement.
 
 ### Destruction
 
-Destroying a scope before it has become unused or joined terminates the program.
+Destroying a scope while it has outstanding associations or a pending join
+terminates the program.
 Callers must close and join scopes that have accepted work before destroying them.
 
 ## `simple_counting_scope` vs `counting_scope`

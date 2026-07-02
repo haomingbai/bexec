@@ -31,7 +31,6 @@
 #include <cstddef>
 #include <exception>
 #include <memory>
-#include <mutex>
 #include <type_traits>
 #include <utility>
 
@@ -79,36 +78,38 @@ class simple_counting_scope {
   [[nodiscard]] join_sender join() noexcept;
 
   void close() noexcept {
-    std::lock_guard lock(mutex_);
-    switch (state_.load(std::memory_order_acquire)) {
-      case state::unused:
-        compare_exchange_state(state::unused, state::unused_and_closed);
-        break;
-      case state::open:
-        compare_exchange_state(state::open, state::closed);
-        break;
-      case state::open_and_joining:
-        compare_exchange_state(state::open_and_joining,
-                               state::closed_and_joining);
-        break;
-      case state::closed:
-      case state::unused_and_closed:
-      case state::closed_and_joining:
-      case state::joined:
-        break;
+    state current = load_state();
+    for (;;) {
+      switch (current) {
+        case state::open:
+          if (try_update_state(current, state::closed)) {
+            return;
+          }
+          break;
+        case state::open_joining:
+          if (try_update_state(current, state::closed_joining)) {
+            (void)try_complete_join();
+            return;
+          }
+          break;
+        case state::closed:
+        case state::closed_joining:
+        case state::joined:
+          return;
+      }
     }
   }
 
  private:
-  enum class state {
-    unused,
+  enum class state : unsigned char {
     open,
+    open_joining,
     closed,
-    unused_and_closed,
-    open_and_joining,
-    closed_and_joining,
+    closed_joining,
     joined
   };
+
+  enum class join_start { complete, enqueue };
 
   friend class token;
   friend class join_sender;
@@ -118,131 +119,142 @@ class simple_counting_scope {
 
   void ensure_destructible() noexcept {
 #ifndef NDEBUG
-    std::lock_guard lock(mutex_);
-    switch (state_.load(std::memory_order_acquire)) {
-      case state::unused:
-      case state::unused_and_closed:
-      case state::joined:
-        return;
-      case state::open:
-      case state::closed:
-      case state::open_and_joining:
-      case state::closed_and_joining:
-        assert(false);
+    const state current = load_state();
+    if (current == state::joined) {
+      return;
     }
+    if (unused_.load(std::memory_order_acquire) &&
+        load_count() == 0 &&
+        (current == state::open || current == state::closed)) {
+      return;
+    }
+    assert(false);
 #endif
   }
 
-  void disassociate() noexcept {
-    detail::scope_join_waiter* completions = nullptr;
-    {
-      std::lock_guard lock(mutex_);
-      if (decrement_count() != 0) {
-        return;
-      }
-
-      switch (state_.load(std::memory_order_acquire)) {
-        case state::open:
-          compare_exchange_state(state::open, state::unused);
-          break;
-        case state::closed:
-          compare_exchange_state(state::closed, state::unused_and_closed);
-          break;
-        case state::open_and_joining:
-          compare_exchange_state(state::open_and_joining, state::joined);
-          completions = joiners_;
-          joiners_ = nullptr;
-          break;
-        case state::closed_and_joining:
-          compare_exchange_state(state::closed_and_joining, state::joined);
-          completions = joiners_;
-          joiners_ = nullptr;
-          break;
-        case state::unused:
-        case state::unused_and_closed:
-        case state::joined:
-          assert(false);
-          break;
-      }
-    }
-
-    complete_all(completions);
-  }
+  void disassociate() noexcept { release_count(); }
 
   bool start_join(detail::scope_join_waiter& waiter) noexcept {
-    {
-      std::lock_guard lock(mutex_);
-      switch (state_.load(std::memory_order_acquire)) {
-        case state::unused:
-          compare_exchange_state(state::unused, state::joined);
-          return true;
-        case state::unused_and_closed:
-          compare_exchange_state(state::unused_and_closed, state::joined);
-          return true;
-        case state::joined:
-          return true;
-        case state::open:
-          compare_exchange_state(state::open, state::open_and_joining);
-          push_joiner(waiter);
-          return false;
-        case state::closed:
-          compare_exchange_state(state::closed, state::closed_and_joining);
-          push_joiner(waiter);
-          return false;
-        case state::open_and_joining:
-        case state::closed_and_joining:
-          push_joiner(waiter);
-          return false;
-      }
+    if (prepare_join() == join_start::complete) {
+      return true;
     }
 
-    return true;
+    push_joiner(waiter);
+    (void)try_complete_join();
+    return false;
+  }
+
+  join_start prepare_join() noexcept {
+    state current = load_state();
+    for (;;) {
+      switch (current) {
+        case state::open:
+          if (try_update_state(current, state::open_joining)) {
+            current = state::open_joining;
+          }
+          break;
+        case state::closed:
+          if (load_count() == 0) {
+            if (try_update_state(current, state::joined)) {
+              complete_ready_joiners();
+              return join_start::complete;
+            }
+            break;
+          }
+          if (try_update_state(current, state::closed_joining)) {
+            current = state::closed_joining;
+          }
+          break;
+        case state::open_joining:
+        case state::closed_joining:
+          return try_complete_join() ? join_start::complete
+                                     : join_start::enqueue;
+        case state::joined:
+          complete_ready_joiners();
+          return join_start::complete;
+      }
+    }
   }
 
   void push_joiner(detail::scope_join_waiter& waiter) noexcept {
-    waiter.next = joiners_;
-    joiners_ = &waiter;
+    detail::scope_join_waiter* current = joiners_.load(memory_order);
+    do {
+      waiter.next = current;
+    } while (!joiners_.compare_exchange_weak(current, &waiter,
+                                             memory_order, memory_order));
+
+    if (load_state() == state::joined) {
+      complete_ready_joiners();
+    }
   }
 
-  void compare_exchange_state(state expected, state desired) noexcept {
-    const bool exchanged = state_.compare_exchange_strong(
-        expected, desired, std::memory_order_acq_rel,
-        std::memory_order_acquire);
-    assert(exchanged);
-    (void)exchanged;
+  state load_state() const noexcept { return state_.load(memory_order); }
+
+  std::size_t load_count() const noexcept {
+    return count_.load(memory_order);
   }
 
-  void compare_exchange_count(std::size_t expected,
-                              std::size_t desired) noexcept {
-    const bool exchanged = count_.compare_exchange_strong(
-        expected, desired, std::memory_order_acq_rel,
-        std::memory_order_acquire);
-    assert(exchanged);
-    (void)exchanged;
+  bool try_update_state(state& expected, state desired) noexcept {
+    return state_.compare_exchange_weak(expected, desired, memory_order,
+                                        memory_order);
+  }
+
+  static constexpr bool can_associate(state value) noexcept {
+    return static_cast<unsigned char>(value) <=
+           static_cast<unsigned char>(state::open_joining);
+  }
+
+  void release_count() noexcept {
+    if (decrement_count() == 0) {
+      unused_.store(true, std::memory_order_release);
+      (void)try_complete_join();
+    }
   }
 
   void increment_count() noexcept {
-    std::size_t current = count_.load(std::memory_order_acquire);
+    const std::size_t previous = count_.fetch_add(1, memory_order);
+    assert(previous != static_cast<std::size_t>(-1));
+  }
+
+  std::size_t decrement_count() noexcept {
+    const std::size_t previous = count_.fetch_sub(1, memory_order);
+    assert(previous != 0);
+    return previous - 1;
+  }
+
+  bool try_complete_join() noexcept {
+    state current = load_state();
     for (;;) {
-      assert(current != static_cast<std::size_t>(-1));
-      if (count_.compare_exchange_weak(current, current + 1,
-                                       std::memory_order_acq_rel,
-                                       std::memory_order_acquire)) {
-        return;
+      switch (current) {
+        case state::open:
+        case state::closed:
+          return false;
+        case state::open_joining:
+          if (load_count() != 0) {
+            return false;
+          }
+          if (try_update_state(current, state::closed_joining)) {
+            current = state::closed_joining;
+          }
+          break;
+        case state::closed_joining:
+          if (load_count() != 0) {
+            return false;
+          }
+          if (try_update_state(current, state::joined)) {
+            complete_ready_joiners();
+            return true;
+          }
+          break;
+        case state::joined:
+          complete_ready_joiners();
+          return true;
       }
     }
   }
 
-  std::size_t decrement_count() noexcept {
-    std::size_t current = count_.load(std::memory_order_acquire);
-    for (;;) {
-      assert(current != 0);
-      if (count_.compare_exchange_weak(current, current - 1,
-                                       std::memory_order_acq_rel,
-                                       std::memory_order_acquire)) {
-        return current - 1;
-      }
-    }
+  void complete_ready_joiners() noexcept {
+    complete_all(joiners_.exchange(nullptr, memory_order));
   }
 
   static void complete_all(detail::scope_join_waiter* waiter) noexcept {
@@ -254,10 +266,11 @@ class simple_counting_scope {
     }
   }
 
-  std::mutex mutex_;
-  std::atomic<state> state_{state::unused};
+  std::atomic<state> state_{state::open};
   std::atomic<std::size_t> count_{0};
-  detail::scope_join_waiter* joiners_{nullptr};
+  std::atomic_bool unused_{true};
+  std::atomic<detail::scope_join_waiter*> joiners_{nullptr};
+  static constexpr std::memory_order memory_order = std::memory_order_seq_cst;
 };
 
 class simple_counting_scope::association {
@@ -310,23 +323,17 @@ class simple_counting_scope::association {
 
 inline simple_counting_scope::association
 simple_counting_scope::try_associate() noexcept {
-  std::lock_guard lock(mutex_);
-  switch (state_.load(std::memory_order_acquire)) {
-    case state::unused:
-      compare_exchange_count(0, 1);
-      compare_exchange_state(state::unused, state::open);
-      return association{*this};
-    case state::open:
-    case state::open_and_joining:
-      increment_count();
-      return association{*this};
-    case state::closed:
-    case state::unused_and_closed:
-    case state::closed_and_joining:
-    case state::joined:
-      return {};
+  if (!can_associate(load_state())) {
+    return {};
   }
 
+  increment_count();
+  unused_.store(false, std::memory_order_release);
+  if (can_associate(load_state())) {
+    return association{*this};
+  }
+
+  release_count();
   return {};
 }
 

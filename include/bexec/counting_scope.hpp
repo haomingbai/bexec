@@ -123,8 +123,7 @@ class simple_counting_scope {
     if (current == state::joined) {
       return;
     }
-    if (unused_.load(std::memory_order_acquire) &&
-        load_count() == 0 &&
+    if (unused_.load(std::memory_order_acquire) && load_count() == 0 &&
         (current == state::open || current == state::closed)) {
       return;
     }
@@ -180,8 +179,8 @@ class simple_counting_scope {
     detail::scope_join_waiter* current = joiners_.load(memory_order);
     do {
       waiter.next = current;
-    } while (!joiners_.compare_exchange_weak(current, &waiter,
-                                             memory_order, memory_order));
+    } while (!joiners_.compare_exchange_weak(current, &waiter, memory_order,
+                                             memory_order));
 
     if (load_state() == state::joined) {
       complete_ready_joiners();
@@ -190,9 +189,7 @@ class simple_counting_scope {
 
   state load_state() const noexcept { return state_.load(memory_order); }
 
-  std::size_t load_count() const noexcept {
-    return count_.load(memory_order);
-  }
+  std::size_t load_count() const noexcept { return count_.load(memory_order); }
 
   bool try_update_state(state& expected, state desired) noexcept {
     return state_.compare_exchange_weak(expected, desired, memory_order,

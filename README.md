@@ -102,6 +102,49 @@ The project builds tests and examples by default. Disable them with:
 cmake -S . -B build -DBEXEC_BUILD_TESTS=OFF -DBEXEC_BUILD_EXAMPLES=OFF
 ```
 
+## Use as a Dependency
+
+The exported target is always `bexec::bexec`. To use an installed copy with
+CMake:
+
+```cmake
+find_package(bexec CONFIG REQUIRED)
+target_link_libraries(your_target PRIVATE bexec::bexec)
+```
+
+The installed `bexec.pc` also supports pkg-config, either directly or through
+CMake:
+
+```cmake
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(BEXEC REQUIRED IMPORTED_TARGET bexec)
+target_link_libraries(your_target PRIVATE PkgConfig::BEXEC)
+```
+
+Source-based inclusion remains supported. Tests and examples default to off
+when bexec is a subproject:
+
+```cmake
+include(FetchContent)
+FetchContent_Declare(
+    bexec
+    GIT_REPOSITORY https://github.com/haomingbai/bexec.git
+    GIT_TAG v0.0.1
+)
+FetchContent_MakeAvailable(bexec)
+target_link_libraries(your_target PRIVATE bexec::bexec)
+```
+
+For a local checkout, `add_subdirectory(path/to/bexec)` provides the same
+target. Maintainers can generate both native packages with:
+
+```sh
+cmake -S . -B build/package \
+  -DBEXEC_BUILD_TESTS=OFF -DBEXEC_BUILD_EXAMPLES=OFF
+cpack --config build/package/CPackConfig.cmake -G DEB
+cpack --config build/package/CPackConfig.cmake -G RPM
+```
+
 ## Formatting
 
 ```sh

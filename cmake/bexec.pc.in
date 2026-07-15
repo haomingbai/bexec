@@ -1,0 +1,8 @@
+prefix=${pcfiledir}/@BEXEC_PC_PREFIX_RELATIVE@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: bexec
+Description: @PROJECT_DESCRIPTION@
+URL: https://github.com/haomingbai/bexec
+Version: @PROJECT_VERSION@
+Cflags: -I${includedir}

@@ -33,9 +33,9 @@ TEST(integration, repeat_until_scheduled_retry_pipeline) {
   loop.finish();
   loop.run();
 
-  EXPECT_TRUE(state->signal == signal_kind::value);
-  EXPECT_TRUE(state->int_value == 4);
-  EXPECT_TRUE(attempts == 4);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 4);
+  EXPECT_EQ(attempts, 4);
 }
 
 }  // namespace bexec_tests

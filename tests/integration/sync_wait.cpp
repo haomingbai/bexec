@@ -22,14 +22,14 @@ namespace bexec_tests {
 TEST(integration, sync_wait_drives_receiver_scheduler) {
   auto asynchronous =
       bexec::this_thread::sync_wait(receiver_scheduler_sender{});
-  EXPECT_TRUE(asynchronous.has_value());
-  EXPECT_TRUE(std::get<0>(*asynchronous) == 42);
+  ASSERT_TRUE(asynchronous.has_value());
+  EXPECT_EQ(std::get<0>(*asynchronous), 42);
 
   auto composed = bexec::this_thread::sync_wait(
       bexec::when_all(bexec::just(20), receiver_scheduler_sender{}) |
       bexec::then([](int lhs, int rhs) { return lhs + rhs - 20; }));
-  EXPECT_TRUE(composed.has_value());
-  EXPECT_TRUE(std::get<0>(*composed) == 42);
+  ASSERT_TRUE(composed.has_value());
+  EXPECT_EQ(std::get<0>(*composed), 42);
 }
 
 }  // namespace bexec_tests

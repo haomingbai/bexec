@@ -18,12 +18,12 @@ namespace bexec_tests {
 
 TEST(basic, sync_wait_value_error_and_stopped) {
   auto value = bexec::this_thread::sync_wait(bexec::just(1, 2));
-  EXPECT_TRUE(value.has_value());
-  EXPECT_TRUE(std::get<0>(*value) == 1);
-  EXPECT_TRUE(std::get<1>(*value) == 2);
+  ASSERT_TRUE(value.has_value());
+  EXPECT_EQ(std::get<0>(*value), 1);
+  EXPECT_EQ(std::get<1>(*value), 2);
 
-  EXPECT_TRUE(
-      !bexec::this_thread::sync_wait(bexec::just_stopped()).has_value());
+  EXPECT_FALSE(
+      bexec::this_thread::sync_wait(bexec::just_stopped()).has_value());
 
   bool caught = false;
   try {

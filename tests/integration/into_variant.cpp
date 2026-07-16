@@ -24,7 +24,7 @@ TEST(integration, into_variant_composes_with_when_all) {
       choice_sender{choice_sender::outcome::string},
       choice_sender{choice_sender::outcome::integer}));
 
-  EXPECT_TRUE(result.has_value());
+  ASSERT_TRUE(result.has_value());
   EXPECT_TRUE(
       std::holds_alternative<std::tuple<std::string>>(std::get<0>(*result)));
   EXPECT_TRUE(std::holds_alternative<std::tuple<int>>(std::get<1>(*result)));

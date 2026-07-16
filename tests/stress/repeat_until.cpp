@@ -25,8 +25,8 @@ TEST(stress, repeat_until_large_synchronous_iteration_count) {
                           [&] { return attempts == target; }));
 
   EXPECT_TRUE(result.has_value());
-  EXPECT_TRUE(std::get<0>(*result) == target);
-  EXPECT_TRUE(attempts == target);
+  EXPECT_EQ(std::get<0>(*result), target);
+  EXPECT_EQ(attempts, target);
 }
 
 }  // namespace bexec_tests

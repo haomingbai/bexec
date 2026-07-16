@@ -21,7 +21,7 @@ TEST(stress, sync_wait_repeated_local_loop_lifecycle) {
   for (int index = 0; index != iterations; ++index) {
     auto result = bexec::this_thread::sync_wait(receiver_scheduler_sender{});
     EXPECT_TRUE(result.has_value());
-    EXPECT_TRUE(std::get<0>(*result) == 42);
+    EXPECT_EQ(std::get<0>(*result), 42);
   }
 }
 

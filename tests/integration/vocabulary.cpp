@@ -23,9 +23,9 @@ TEST(integration, vocabulary_layered_environment_queries) {
                                           bexec::empty_env{}};
   bexec::env_with_stop_token env{source.get_token(), scheduler_env};
 
-  EXPECT_TRUE(bexec::get_scheduler(env) == loop.get_scheduler());
-  EXPECT_TRUE(bexec::get_delegation_scheduler(env) == loop.get_scheduler());
-  EXPECT_TRUE(!bexec::get_stop_token(env).stop_requested());
+  EXPECT_EQ(bexec::get_scheduler(env), loop.get_scheduler());
+  EXPECT_EQ(bexec::get_delegation_scheduler(env), loop.get_scheduler());
+  EXPECT_FALSE(bexec::get_stop_token(env).stop_requested());
   EXPECT_TRUE(source.request_stop());
   EXPECT_TRUE(bexec::get_stop_token(env).stop_requested());
 }

@@ -24,7 +24,7 @@ TEST(stress, then_long_synchronous_workload) {
         bexec::just(index) | bexec::then([](int value) { return value + 1; }) |
         bexec::then([](int value) { return value * 2; }));
     EXPECT_TRUE(result.has_value());
-    EXPECT_TRUE(std::get<0>(*result) == (index + 1) * 2);
+    EXPECT_EQ(std::get<0>(*result), (index + 1) * 2);
   }
 }
 

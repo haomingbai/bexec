@@ -52,11 +52,11 @@ TEST(integration, on_returns_completion_to_receiver_scheduler) {
   bexec::start(operation);
   target.finish();
   target.run();
-  EXPECT_TRUE(state->signal == signal_kind::none);
+  EXPECT_EQ(state->signal, signal_kind::none);
   final.finish();
   final.run();
-  EXPECT_TRUE(state->signal == signal_kind::value);
-  EXPECT_TRUE(state->int_value == 42);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 42);
 }
 
 }  // namespace bexec_tests

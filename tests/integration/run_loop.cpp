@@ -42,7 +42,7 @@ TEST(integration, run_loop_blocks_and_wakes_for_producer) {
   }
   loop.finish();
   runner.join();
-  EXPECT_TRUE(completed.load(std::memory_order_relaxed) == 1);
+  EXPECT_EQ(completed.load(std::memory_order_relaxed), 1);
 }
 
 }  // namespace bexec_tests

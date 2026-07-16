@@ -36,8 +36,8 @@ TEST(integration, when_all_scheduled_pipeline) {
   loop.finish();
   loop.run();
 
-  EXPECT_TRUE(state->signal == signal_kind::value);
-  EXPECT_TRUE(state->int_value == 42);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 42);
 }
 
 }  // namespace bexec_tests

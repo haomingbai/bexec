@@ -57,8 +57,8 @@ TEST(basic, vocabulary_concept_contracts) {
   static_assert(!std::move_constructible<decltype(when_all_operation)>);
 
   bexec::start(operation);
-  EXPECT_TRUE(state->signal == signal_kind::value);
-  EXPECT_TRUE(state->int_value == 2);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 2);
 }
 
 }  // namespace bexec_tests

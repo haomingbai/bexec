@@ -25,7 +25,7 @@ TEST(stress, task_repeated_create_start_destroy) {
     auto task = indexed_task(index);
     task.start();
     EXPECT_TRUE(task.done());
-    EXPECT_TRUE(task.result() == index);
+    EXPECT_EQ(task.result(), index);
   }
 }
 

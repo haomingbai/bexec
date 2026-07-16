@@ -36,7 +36,7 @@ TEST(basic, run_loop_fifo_and_finish) {
   bexec::start(third_operation);
   loop.finish();
   loop.run();
-  EXPECT_TRUE((order == std::vector<int>{1, 2, 3}));
+  EXPECT_EQ(order, (std::vector<int>{1, 2, 3}));
 }
 
 }  // namespace bexec_tests

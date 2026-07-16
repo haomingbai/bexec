@@ -22,8 +22,8 @@ TEST(integration, counting_scope_spawn_future_consume_and_join) {
   bexec::counting_scope scope;
   auto future = bexec::spawn_future(bexec::just(42), scope.get_token());
   auto result = bexec::this_thread::sync_wait(std::move(future));
-  EXPECT_TRUE(result.has_value());
-  EXPECT_TRUE(std::get<0>(*result) == 42);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(std::get<0>(*result), 42);
 
   scope.close();
   auto joined = bexec::this_thread::sync_wait(scope.join());

@@ -35,9 +35,9 @@ TEST(integration, generator_works_with_ranges_algorithms) {
   std::vector<int> collected;
   std::ranges::copy(sequence(5), std::back_inserter(collected));
 
-  EXPECT_TRUE(collected.size() == 5);
+  EXPECT_EQ(collected.size(), 5);
   for (std::size_t index = 0; index != collected.size(); ++index) {
-    EXPECT_TRUE(collected[index] == static_cast<int>(index));
+    EXPECT_EQ(collected[index], static_cast<int>(index));
   }
 
   bool caught = false;

@@ -68,8 +68,8 @@ TEST(stress, run_loop_multi_producer_queue) {
   }
   loop.finish();
   runner.join();
-  EXPECT_TRUE(completed.load(std::memory_order_relaxed) ==
-              thread_count * operations_per_thread);
+  EXPECT_EQ(completed.load(std::memory_order_relaxed),
+            thread_count * operations_per_thread);
 }
 
 }  // namespace bexec_tests

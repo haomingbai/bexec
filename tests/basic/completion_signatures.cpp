@@ -197,8 +197,8 @@ TEST(basic, completion_signature_contracts) {
   auto token_from_object = bexec::get_stop_token(env);
   auto token_from_query = bexec::query(env, bexec::get_stop_token);
 
-  EXPECT_TRUE(!token_from_object.stop_requested());
-  EXPECT_TRUE(!token_from_query.stop_requested());
+  EXPECT_FALSE(token_from_object.stop_requested());
+  EXPECT_FALSE(token_from_query.stop_requested());
   source.request_stop();
   EXPECT_TRUE(token_from_object.stop_requested());
   EXPECT_TRUE(token_from_query.stop_requested());

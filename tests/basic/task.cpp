@@ -42,15 +42,15 @@ bexec::task<int> await_immediate_senders() {
 TEST(basic, task_lazy_value_and_void_behavior) {
   auto value_task = lazy_value();
 
-  EXPECT_TRUE(!value_task.done());
+  EXPECT_FALSE(value_task.done());
   value_task.start();
   EXPECT_TRUE(value_task.done());
-  EXPECT_TRUE(value_task.result() == 42);
+  EXPECT_EQ(value_task.result(), 42);
 
   bool ran = false;
   auto void_task = lazy_void(ran);
-  EXPECT_TRUE(!ran);
-  EXPECT_TRUE(!void_task.done());
+  EXPECT_FALSE(ran);
+  EXPECT_FALSE(void_task.done());
   void_task.start();
   EXPECT_TRUE(void_task.done());
   void_task.result();
@@ -79,7 +79,7 @@ TEST(basic, task_sender_awaitable_shapes) {
   auto task = await_immediate_senders();
   task.start();
   EXPECT_TRUE(task.done());
-  EXPECT_TRUE(task.result() == 43);
+  EXPECT_EQ(task.result(), 43);
 }
 
 }  // namespace bexec_tests

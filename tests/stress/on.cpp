@@ -65,7 +65,7 @@ TEST(stress, on_many_cross_scheduler_completions) {
   target.run();
   final.finish();
   final.run();
-  EXPECT_TRUE(completed.load(std::memory_order_relaxed) == operation_count);
+  EXPECT_EQ(completed.load(std::memory_order_relaxed), operation_count);
 }
 
 }  // namespace bexec_tests

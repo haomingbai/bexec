@@ -33,7 +33,7 @@ TEST(basic, then_completion_transformations) {
 
     bexec::start(operation);
     EXPECT_TRUE(called);
-    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_EQ(state->signal, signal_kind::value);
   }
 
   {
@@ -45,7 +45,7 @@ TEST(basic, then_completion_transformations) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_EQ(state->signal, signal_kind::error);
     EXPECT_TRUE(static_cast<bool>(state->exception));
   }
 
@@ -56,8 +56,8 @@ TEST(basic, then_completion_transformations) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::value);
-    EXPECT_TRUE(state->int_value == 7);
+    EXPECT_EQ(state->signal, signal_kind::value);
+    EXPECT_EQ(state->int_value, 7);
   }
 
   {
@@ -67,8 +67,8 @@ TEST(basic, then_completion_transformations) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::value);
-    EXPECT_TRUE(state->int_value == 5);
+    EXPECT_EQ(state->signal, signal_kind::value);
+    EXPECT_EQ(state->int_value, 5);
   }
 
   {
@@ -78,8 +78,8 @@ TEST(basic, then_completion_transformations) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::value);
-    EXPECT_TRUE(state->int_value == 42);
+    EXPECT_EQ(state->signal, signal_kind::value);
+    EXPECT_EQ(state->int_value, 42);
   }
 
   {
@@ -91,7 +91,7 @@ TEST(basic, then_completion_transformations) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_EQ(state->signal, signal_kind::error);
     EXPECT_TRUE(static_cast<bool>(state->exception));
   }
 }

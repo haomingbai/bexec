@@ -23,9 +23,9 @@ TEST(stress, when_all_repeated_fan_in) {
     auto result = bexec::this_thread::sync_wait(bexec::when_all(
         bexec::just(index), bexec::just(index + 1), bexec::just(index + 2)));
     EXPECT_TRUE(result.has_value());
-    EXPECT_TRUE(std::get<0>(*result) == index);
-    EXPECT_TRUE(std::get<1>(*result) == index + 1);
-    EXPECT_TRUE(std::get<2>(*result) == index + 2);
+    EXPECT_EQ(std::get<0>(*result), index);
+    EXPECT_EQ(std::get<1>(*result), index + 1);
+    EXPECT_EQ(std::get<2>(*result), index + 2);
   }
 }
 

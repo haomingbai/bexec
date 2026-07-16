@@ -212,10 +212,10 @@ TEST(integration, task_move_and_exception_propagation) {
   auto original = indexed_task(42);
   auto moved = std::move(original);
   EXPECT_TRUE(original.done());
-  EXPECT_TRUE(!moved.done());
+  EXPECT_FALSE(moved.done());
   moved.start();
   EXPECT_TRUE(moved.done());
-  EXPECT_TRUE(moved.result() == 42);
+  EXPECT_EQ(moved.result(), 42);
 
   auto failure = throwing_task();
   failure.start();
@@ -230,12 +230,12 @@ TEST(integration, task_move_and_exception_propagation) {
   int progress = 0;
   auto suspended = twice_suspended_task(progress);
   suspended.start();
-  EXPECT_TRUE(!suspended.done());
-  EXPECT_TRUE(progress == 1);
+  EXPECT_FALSE(suspended.done());
+  EXPECT_EQ(progress, 1);
   suspended.start();
   EXPECT_TRUE(suspended.done());
-  EXPECT_TRUE(progress == 2);
-  EXPECT_TRUE(suspended.result() == 42);
+  EXPECT_EQ(progress, 2);
+  EXPECT_EQ(suspended.result(), 42);
 }
 
 TEST(integration, task_awaits_async_sender_and_child_tasks) {
@@ -243,19 +243,19 @@ TEST(integration, task_awaits_async_sender_and_child_tasks) {
   auto scheduled = scheduled_task(loop);
 
   scheduled.start();
-  EXPECT_TRUE(!scheduled.done());
+  EXPECT_FALSE(scheduled.done());
 
   loop.finish();
   loop.run();
   EXPECT_TRUE(scheduled.done());
-  EXPECT_TRUE(scheduled.result() == 42);
+  EXPECT_EQ(scheduled.result(), 42);
 
   bool child_ran = false;
   auto parent = parent_task(child_ran);
   parent.start();
   EXPECT_TRUE(parent.done());
   EXPECT_TRUE(child_ran);
-  EXPECT_TRUE(parent.result() == 42);
+  EXPECT_EQ(parent.result(), 42);
 }
 
 TEST(integration, task_nested_async_continuation_chain) {
@@ -264,15 +264,15 @@ TEST(integration, task_nested_async_continuation_chain) {
   auto parent = scheduled_parent_task(loop, progress);
 
   parent.start();
-  EXPECT_TRUE(!parent.done());
-  EXPECT_TRUE(progress == 2);
+  EXPECT_FALSE(parent.done());
+  EXPECT_EQ(progress, 2);
 
   loop.finish();
   loop.run();
 
   EXPECT_TRUE(parent.done());
-  EXPECT_TRUE(progress == 4);
-  EXPECT_TRUE(parent.result() == 42);
+  EXPECT_EQ(progress, 4);
+  EXPECT_EQ(parent.result(), 42);
 }
 
 TEST(integration, task_sender_error_and_stopped_propagation) {
@@ -292,7 +292,7 @@ TEST(integration, task_sender_error_and_stopped_propagation) {
   auto stopped = parent_stopped_task(continued);
   stopped.start();
   EXPECT_TRUE(stopped.done());
-  EXPECT_TRUE(!continued);
+  EXPECT_FALSE(continued);
 
   bool caught_stopped = false;
   try {
@@ -307,8 +307,8 @@ TEST(integration, task_sender_error_and_stopped_propagation) {
   auto inside_catch = stopped_inside_catch(caught, catch_continued);
   inside_catch.start();
   EXPECT_TRUE(inside_catch.done());
-  EXPECT_TRUE(!caught);
-  EXPECT_TRUE(!catch_continued);
+  EXPECT_FALSE(caught);
+  EXPECT_FALSE(catch_continued);
 
   auto child = stopped_task(catch_continued);
   child.start();
@@ -318,15 +318,15 @@ TEST(integration, task_sender_error_and_stopped_propagation) {
       await_stopped_child(std::move(child), caught, catch_continued);
   await_existing.start();
   EXPECT_TRUE(await_existing.done());
-  EXPECT_TRUE(!caught);
-  EXPECT_TRUE(!catch_continued);
+  EXPECT_FALSE(caught);
+  EXPECT_FALSE(catch_continued);
 }
 
 TEST(integration, task_supports_immovable_operations_and_promise_env) {
   auto immovable = immovable_operation_task();
   immovable.start();
   EXPECT_TRUE(immovable.done());
-  EXPECT_TRUE(immovable.result() == 17);
+  EXPECT_EQ(immovable.result(), 17);
 
   bool observed = false;
   auto environment = observe_promise_environment(observed);

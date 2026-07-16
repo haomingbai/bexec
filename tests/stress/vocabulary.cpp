@@ -25,9 +25,9 @@ TEST(stress, vocabulary_query_stability) {
 
   const int iterations = stress_iterations(100000);
   for (int index = 0; index != iterations; ++index) {
-    EXPECT_TRUE(bexec::query(env, bexec::get_scheduler) ==
-                loop.get_scheduler());
-    EXPECT_TRUE(!bexec::query(env, bexec::get_stop_token).stop_requested());
+    EXPECT_EQ(bexec::query(env, bexec::get_scheduler),
+              loop.get_scheduler());
+    EXPECT_FALSE(bexec::query(env, bexec::get_stop_token).stop_requested());
   }
 }
 

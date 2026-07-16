@@ -29,8 +29,8 @@ TEST(basic, just_completion_paths) {
                                     any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::value);
-    EXPECT_TRUE(state->int_value == 42);
+    EXPECT_EQ(state->signal, signal_kind::value);
+    EXPECT_EQ(state->int_value, 42);
   }
 
   {
@@ -39,7 +39,7 @@ TEST(basic, just_completion_paths) {
                                     any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_EQ(state->signal, signal_kind::error);
   }
 
   {
@@ -47,7 +47,7 @@ TEST(basic, just_completion_paths) {
     auto operation = bexec::connect(bexec::just_stopped(), any_receiver{state});
 
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::stopped);
+    EXPECT_EQ(state->signal, signal_kind::stopped);
   }
 }
 

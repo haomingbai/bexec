@@ -23,8 +23,8 @@ TEST(integration, then_error_recovery_pipeline) {
       bexec::upon_error([](int error) { return error + 1; }) |
       bexec::then([](int value) { return value * 2; }));
 
-  EXPECT_TRUE(result.has_value());
-  EXPECT_TRUE(std::get<0>(*result) == 42);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(std::get<0>(*result), 42);
 }
 
 }  // namespace bexec_tests

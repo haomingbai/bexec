@@ -24,8 +24,8 @@ TEST(stress, just_repeated_move_only_delivery) {
     auto operation = bexec::connect(bexec::just(std::make_unique<int>(index)),
                                     any_receiver{state});
     bexec::start(operation);
-    EXPECT_TRUE(state->signal == signal_kind::value);
-    EXPECT_TRUE(state->int_value == index);
+    EXPECT_EQ(state->signal, signal_kind::value);
+    EXPECT_EQ(state->int_value, index);
   }
 }
 

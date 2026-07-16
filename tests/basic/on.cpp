@@ -24,11 +24,11 @@ TEST(basic, starts_on_defers_source_start) {
   auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
   bexec::start(operation);
-  EXPECT_TRUE(state->signal == signal_kind::none);
+  EXPECT_EQ(state->signal, signal_kind::none);
   loop.finish();
   loop.run();
-  EXPECT_TRUE(state->signal == signal_kind::value);
-  EXPECT_TRUE(state->int_value == 42);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 42);
 }
 
 }  // namespace bexec_tests

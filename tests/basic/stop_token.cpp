@@ -22,11 +22,11 @@ TEST(basic, stop_token_registration_and_unregistration) {
     bexec::inplace_stop_callback callback{token, [&] { ++callbacks; }};
   }
   EXPECT_TRUE(source.request_stop());
-  EXPECT_TRUE(callbacks == 0);
+  EXPECT_EQ(callbacks, 0);
 
   bexec::inplace_stop_callback late{token, [&] { ++callbacks; }};
-  EXPECT_TRUE(callbacks == 1);
-  EXPECT_TRUE(!source.request_stop());
+  EXPECT_EQ(callbacks, 1);
+  EXPECT_FALSE(source.request_stop());
 }
 
 }  // namespace bexec_tests

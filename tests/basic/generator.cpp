@@ -38,16 +38,16 @@ TEST(basic, generator_models_single_pass_range) {
 
   int expected = 1;
   for (int value : values()) {
-    EXPECT_TRUE(value == expected);
+    EXPECT_EQ(value, expected);
     ++expected;
   }
-  EXPECT_TRUE(expected == 4);
+  EXPECT_EQ(expected, 4);
 
   int count = 0;
   for ([[maybe_unused]] int value : empty_values()) {
     ++count;
   }
-  EXPECT_TRUE(count == 0);
+  EXPECT_EQ(count, 0);
 }
 
 }  // namespace bexec_tests

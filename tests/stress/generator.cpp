@@ -32,7 +32,7 @@ TEST(stress, generator_repeated_create_and_iterate) {
     }
   }
 
-  EXPECT_TRUE(sum == static_cast<long long>(iterations) *
+  EXPECT_EQ(sum, static_cast<long long>(iterations) *
                          static_cast<long long>(iterations));
 }
 

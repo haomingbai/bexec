@@ -30,7 +30,7 @@ TEST(integration, stop_token_cancels_queued_schedule) {
   EXPECT_TRUE(source.request_stop());
   loop.finish();
   loop.run();
-  EXPECT_TRUE(state->signal == signal_kind::stopped);
+  EXPECT_EQ(state->signal, signal_kind::stopped);
 }
 
 }  // namespace bexec_tests

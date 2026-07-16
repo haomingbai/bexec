@@ -24,7 +24,7 @@ TEST(stress, let_repeated_child_replacement) {
         bexec::just(index) |
         bexec::let_value([](int value) { return bexec::just(value + 1); }));
     EXPECT_TRUE(result.has_value());
-    EXPECT_TRUE(std::get<0>(*result) == index + 1);
+    EXPECT_EQ(std::get<0>(*result), index + 1);
   }
 }
 

@@ -23,8 +23,8 @@ TEST(integration, just_composes_with_then_and_sync_wait) {
       bexec::just(std::make_unique<int>(40)) |
       bexec::then([](std::unique_ptr<int> value) { return *value + 2; }));
 
-  EXPECT_TRUE(result.has_value());
-  EXPECT_TRUE(std::get<0>(*result) == 42);
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(std::get<0>(*result), 42);
 }
 
 }  // namespace bexec_tests

@@ -25,7 +25,7 @@ TEST(stress, counting_scope_repeated_future_lifecycle) {
     auto future = bexec::spawn_future(bexec::just(index), scope.get_token());
     auto result = bexec::this_thread::sync_wait(std::move(future));
     EXPECT_TRUE(result.has_value());
-    EXPECT_TRUE(std::get<0>(*result) == index);
+    EXPECT_EQ(std::get<0>(*result), index);
     scope.close();
     EXPECT_TRUE(bexec::this_thread::sync_wait(scope.join()).has_value());
   }

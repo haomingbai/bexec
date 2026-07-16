@@ -39,13 +39,13 @@ TEST(stress, stop_token_concurrent_race_regressions) {
   int callbacks = 0;
   {
     bexec::inplace_stop_callback callback{token, [&] { ++callbacks; }};
-    EXPECT_TRUE(!token.stop_requested());
+    EXPECT_FALSE(token.stop_requested());
     EXPECT_TRUE(source.request_stop());
-    EXPECT_TRUE(callbacks == 1);
+    EXPECT_EQ(callbacks, 1);
   }
 
   bexec::inplace_stop_callback immediate{token, [&] { ++callbacks; }};
-  EXPECT_TRUE(callbacks == 2);
+  EXPECT_EQ(callbacks, 2);
   EXPECT_TRUE(token.stop_requested());
 
   {
@@ -63,8 +63,8 @@ TEST(stress, stop_token_concurrent_race_regressions) {
     registration =
         std::make_unique<callback_type>(self_destroy_token, callback);
     EXPECT_TRUE(self_destroy_source.request_stop());
-    EXPECT_TRUE(self_destroy_callbacks == 1);
-    EXPECT_TRUE(registration == nullptr);
+    EXPECT_EQ(self_destroy_callbacks, 1);
+    EXPECT_EQ(registration, nullptr);
   }
 
   {
@@ -94,8 +94,8 @@ TEST(stress, stop_token_concurrent_race_regressions) {
       requester.join();
     }
 
-    EXPECT_TRUE(request_winners.load(std::memory_order_relaxed) == 1);
-    EXPECT_TRUE(concurrent_callbacks.load(std::memory_order_relaxed) == 2);
+    EXPECT_EQ(request_winners.load(std::memory_order_relaxed), 1);
+    EXPECT_EQ(concurrent_callbacks.load(std::memory_order_relaxed), 2);
   }
 
   {
@@ -150,7 +150,7 @@ TEST(stress, stop_token_concurrent_race_regressions) {
       registrar.join();
     }
 
-    EXPECT_TRUE(late_callbacks.load(std::memory_order_relaxed) == threads);
+    EXPECT_EQ(late_callbacks.load(std::memory_order_relaxed), threads);
   }
 }
 

@@ -19,14 +19,15 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(into_variant_composes_with_when_all, integration) {
+TEST(integration, into_variant_composes_with_when_all) {
   auto result = bexec::this_thread::sync_wait(bexec::when_all_with_variant(
       choice_sender{choice_sender::outcome::string},
       choice_sender{choice_sender::outcome::integer}));
 
-  CHECK(result.has_value());
-  CHECK(std::holds_alternative<std::tuple<std::string>>(std::get<0>(*result)));
-  CHECK(std::holds_alternative<std::tuple<int>>(std::get<1>(*result)));
+  EXPECT_TRUE(result.has_value());
+  EXPECT_TRUE(
+      std::holds_alternative<std::tuple<std::string>>(std::get<0>(*result)));
+  EXPECT_TRUE(std::holds_alternative<std::tuple<int>>(std::get<1>(*result)));
 }
 
 }  // namespace bexec_tests

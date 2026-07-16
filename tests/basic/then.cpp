@@ -24,7 +24,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(then_completion_transformations, basic) {
+TEST(basic, then_completion_transformations) {
   {
     auto state = std::make_shared<shared_state>();
     bool called = false;
@@ -32,8 +32,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(called);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(called);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -45,8 +45,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(static_cast<bool>(state->exception));
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(static_cast<bool>(state->exception));
   }
 
   {
@@ -56,8 +56,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 7);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 7);
   }
 
   {
@@ -67,8 +67,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 5);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 5);
   }
 
   {
@@ -78,8 +78,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 42);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 42);
   }
 
   {
@@ -91,8 +91,8 @@ BEXEC_TEST_CASE(then_completion_transformations, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(static_cast<bool>(state->exception));
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(static_cast<bool>(state->exception));
   }
 }
 

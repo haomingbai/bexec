@@ -38,7 +38,7 @@ struct scheduled_state_receiver {
 
 }  // namespace
 
-BEXEC_TEST_CASE(on_returns_completion_to_receiver_scheduler, integration) {
+TEST(integration, on_returns_completion_to_receiver_scheduler) {
   bexec::run_loop target;
   bexec::run_loop final;
   auto state = std::make_shared<shared_state>();
@@ -52,11 +52,11 @@ BEXEC_TEST_CASE(on_returns_completion_to_receiver_scheduler, integration) {
   bexec::start(operation);
   target.finish();
   target.run();
-  CHECK(state->signal == signal_kind::none);
+  EXPECT_TRUE(state->signal == signal_kind::none);
   final.finish();
   final.run();
-  CHECK(state->signal == signal_kind::value);
-  CHECK(state->int_value == 42);
+  EXPECT_TRUE(state->signal == signal_kind::value);
+  EXPECT_TRUE(state->int_value == 42);
 }
 
 }  // namespace bexec_tests

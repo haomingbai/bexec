@@ -28,7 +28,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(vocabulary_concept_contracts, basic) {
+TEST(basic, vocabulary_concept_contracts) {
   static_assert(bexec::sender<decltype(bexec::just(1))>);
 
   auto state = std::make_shared<shared_state>();
@@ -57,8 +57,8 @@ BEXEC_TEST_CASE(vocabulary_concept_contracts, basic) {
   static_assert(!std::move_constructible<decltype(when_all_operation)>);
 
   bexec::start(operation);
-  CHECK(state->signal == signal_kind::value);
-  CHECK(state->int_value == 2);
+  EXPECT_TRUE(state->signal == signal_kind::value);
+  EXPECT_TRUE(state->int_value == 2);
 }
 
 }  // namespace bexec_tests

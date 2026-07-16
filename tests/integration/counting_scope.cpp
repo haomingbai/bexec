@@ -18,16 +18,16 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(counting_scope_spawn_future_consume_and_join, integration) {
+TEST(integration, counting_scope_spawn_future_consume_and_join) {
   bexec::counting_scope scope;
   auto future = bexec::spawn_future(bexec::just(42), scope.get_token());
   auto result = bexec::this_thread::sync_wait(std::move(future));
-  CHECK(result.has_value());
-  CHECK(std::get<0>(*result) == 42);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_TRUE(std::get<0>(*result) == 42);
 
   scope.close();
   auto joined = bexec::this_thread::sync_wait(scope.join());
-  CHECK(joined.has_value());
+  EXPECT_TRUE(joined.has_value());
 }
 
 }  // namespace bexec_tests

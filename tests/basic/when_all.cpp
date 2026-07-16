@@ -285,7 +285,7 @@ struct two_variant_receiver {
 
 }  // namespace
 
-BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
+TEST(basic, when_all_aggregation_paths) {
   static_assert(!std::is_invocable_v<decltype(bexec::when_all)>);
 
   {
@@ -294,7 +294,7 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::when_all(bexec::just(), bexec::just()), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -305,8 +305,8 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(transformed);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(transformed);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -317,9 +317,9 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 3);
-    CHECK(state->string_value == "ok");
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 3);
+    EXPECT_TRUE(state->string_value == "ok");
   }
 
   {
@@ -330,8 +330,8 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 42);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 42);
   }
 
   {
@@ -341,8 +341,8 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::when_all(non_movable_value_sender{9}, bexec::just(1)), receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 10);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 10);
   }
 
   {
@@ -358,10 +358,10 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::when_all(bexec::just(), bexec::just_error(7)), receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(error->has_value());
-    CHECK(std::holds_alternative<int>(**error));
-    CHECK(std::get<int>(**error) == 7);
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(error->has_value());
+    EXPECT_TRUE(std::holds_alternative<int>(**error));
+    EXPECT_TRUE(std::get<int>(**error) == 7);
   }
 
   {
@@ -371,8 +371,8 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::when_all(bexec::just(), bexec::just_error(9)), receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(state->int_value == 9);
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->int_value == 9);
   }
 
   {
@@ -390,10 +390,10 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
                        receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(error->has_value());
-    CHECK(std::holds_alternative<int>(**error));
-    CHECK(std::get<int>(**error) == 3);
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(error->has_value());
+    EXPECT_TRUE(std::holds_alternative<int>(**error));
+    EXPECT_TRUE(std::get<int>(**error) == 3);
   }
 
   {
@@ -403,7 +403,7 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
                        any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 
   {
@@ -422,8 +422,8 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
     bexec::start(operation);
     loop.finish();
     loop.run();
-    CHECK(count == 2);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(count == 2);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -443,7 +443,7 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
 
     loop.finish();
     loop.run();
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 
   {
@@ -453,7 +453,7 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::connect(bexec::when_all(bexec::just()), std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -470,10 +470,10 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         bexec::connect(bexec::into_variant(choice_sender{false}), receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(value->has_value());
-    CHECK(std::holds_alternative<std::tuple<int>>(**value));
-    CHECK(std::get<0>(std::get<std::tuple<int>>(**value)) == 17);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(value->has_value());
+    EXPECT_TRUE(std::holds_alternative<std::tuple<int>>(**value));
+    EXPECT_TRUE(std::get<0>(std::get<std::tuple<int>>(**value)) == 17);
   }
 
   {
@@ -484,9 +484,9 @@ BEXEC_TEST_CASE(when_all_aggregation_paths, basic) {
         receiver);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 17);
-    CHECK(state->string_value == "selected");
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 17);
+    EXPECT_TRUE(state->string_value == "selected");
   }
 }
 

@@ -18,7 +18,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(let_replacement_schedules_child_work, integration) {
+TEST(integration, let_replacement_schedules_child_work) {
   bexec::run_loop loop;
   auto sender = bexec::just(40) | bexec::let_value([&](int value) {
                   return bexec::schedule(loop.get_scheduler()) |
@@ -28,11 +28,11 @@ BEXEC_TEST_CASE(let_replacement_schedules_child_work, integration) {
   auto state = std::make_shared<shared_state>();
   auto operation = bexec::connect(std::move(sender), any_receiver{state});
   bexec::start(operation);
-  CHECK(state->signal == signal_kind::none);
+  EXPECT_TRUE(state->signal == signal_kind::none);
   loop.finish();
   loop.run();
-  CHECK(state->signal == signal_kind::value);
-  CHECK(state->int_value == 42);
+  EXPECT_TRUE(state->signal == signal_kind::value);
+  EXPECT_TRUE(state->int_value == 42);
 }
 
 }  // namespace bexec_tests

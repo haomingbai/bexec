@@ -17,15 +17,15 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(just_repeated_move_only_delivery, stress) {
+TEST(stress, just_repeated_move_only_delivery) {
   const int iterations = stress_iterations(20000);
   for (int index = 0; index != iterations; ++index) {
     auto state = std::make_shared<shared_state>();
     auto operation = bexec::connect(bexec::just(std::make_unique<int>(index)),
                                     any_receiver{state});
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == index);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == index);
   }
 }
 

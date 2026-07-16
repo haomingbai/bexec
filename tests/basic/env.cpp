@@ -73,7 +73,7 @@ struct allocator_env {
   }
 };
 
-BEXEC_TEST_CASE(environment_query_contracts, basic) {
+TEST(basic, environment_query_contracts) {
   auto fallback_allocator =
       bexec::query(bexec::empty_env{}, bexec::get_allocator);
   static_assert(
@@ -84,8 +84,8 @@ BEXEC_TEST_CASE(environment_query_contracts, basic) {
   auto custom_allocator = bexec::get_allocator(custom_env);
   auto queried_custom_allocator =
       bexec::query(custom_env, bexec::get_allocator);
-  CHECK(custom_allocator.counts == counts);
-  CHECK(queried_custom_allocator.counts == counts);
+  EXPECT_TRUE(custom_allocator.counts == counts);
+  EXPECT_TRUE(queried_custom_allocator.counts == counts);
 
   bexec::inplace_stop_source source;
   source.request_stop();
@@ -101,10 +101,10 @@ BEXEC_TEST_CASE(environment_query_contracts, basic) {
       bexec::connect(bexec::schedule(loop.get_scheduler()), receiver);
   bexec::start(operation);
 
-  CHECK(state->signal == signal_kind::none);
+  EXPECT_TRUE(state->signal == signal_kind::none);
   loop.finish();
   loop.run();
-  CHECK(state->signal == signal_kind::stopped);
+  EXPECT_TRUE(state->signal == signal_kind::stopped);
 }
 
 }  // namespace bexec_tests

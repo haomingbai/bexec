@@ -28,7 +28,7 @@ bexec::generator<int> empty_values() { co_return; }
 
 }  // namespace
 
-BEXEC_TEST_CASE(generator_models_single_pass_range, basic) {
+TEST(basic, generator_models_single_pass_range) {
   static_assert(std::ranges::input_range<bexec::generator<int>>);
   static_assert(
       std::same_as<std::ranges::range_reference_t<bexec::generator<int>>,
@@ -38,16 +38,16 @@ BEXEC_TEST_CASE(generator_models_single_pass_range, basic) {
 
   int expected = 1;
   for (int value : values()) {
-    CHECK(value == expected);
+    EXPECT_TRUE(value == expected);
     ++expected;
   }
-  CHECK(expected == 4);
+  EXPECT_TRUE(expected == 4);
 
   int count = 0;
   for ([[maybe_unused]] int value : empty_values()) {
     ++count;
   }
-  CHECK(count == 0);
+  EXPECT_TRUE(count == 0);
 }
 
 }  // namespace bexec_tests

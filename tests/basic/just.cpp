@@ -22,15 +22,15 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(just_completion_paths, basic) {
+TEST(basic, just_completion_paths) {
   {
     auto state = std::make_shared<shared_state>();
     auto operation = bexec::connect(bexec::just(std::make_unique<int>(42)),
                                     any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 42);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 42);
   }
 
   {
@@ -39,7 +39,7 @@ BEXEC_TEST_CASE(just_completion_paths, basic) {
                                     any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->signal == signal_kind::error);
   }
 
   {
@@ -47,7 +47,7 @@ BEXEC_TEST_CASE(just_completion_paths, basic) {
     auto operation = bexec::connect(bexec::just_stopped(), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 }
 

@@ -95,7 +95,7 @@ struct env_dependent_sender {
 
 }  // namespace
 
-BEXEC_TEST_CASE(completion_signature_contracts, basic) {
+TEST(basic, completion_signature_contracts) {
   using just_int = decltype(bexec::just(1));
   static_assert(!bexec::sender<int>);
   static_assert(
@@ -197,11 +197,11 @@ BEXEC_TEST_CASE(completion_signature_contracts, basic) {
   auto token_from_object = bexec::get_stop_token(env);
   auto token_from_query = bexec::query(env, bexec::get_stop_token);
 
-  CHECK(!token_from_object.stop_requested());
-  CHECK(!token_from_query.stop_requested());
+  EXPECT_TRUE(!token_from_object.stop_requested());
+  EXPECT_TRUE(!token_from_query.stop_requested());
   source.request_stop();
-  CHECK(token_from_object.stop_requested());
-  CHECK(token_from_query.stop_requested());
+  EXPECT_TRUE(token_from_object.stop_requested());
+  EXPECT_TRUE(token_from_query.stop_requested());
 }
 
 }  // namespace bexec_tests

@@ -19,7 +19,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(when_all_scheduled_pipeline, integration) {
+TEST(integration, when_all_scheduled_pipeline) {
   bexec::run_loop loop;
   auto first = bexec::starts_on(
       loop.get_scheduler(),
@@ -36,8 +36,8 @@ BEXEC_TEST_CASE(when_all_scheduled_pipeline, integration) {
   loop.finish();
   loop.run();
 
-  CHECK(state->signal == signal_kind::value);
-  CHECK(state->int_value == 42);
+  EXPECT_TRUE(state->signal == signal_kind::value);
+  EXPECT_TRUE(state->int_value == 42);
 }
 
 }  // namespace bexec_tests

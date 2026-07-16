@@ -18,18 +18,18 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(into_variant_repeated_alternative_selection, stress) {
+TEST(stress, into_variant_repeated_alternative_selection) {
   const int iterations = stress_iterations(10000);
   for (int index = 0; index != iterations; ++index) {
     const auto selected = (index % 2 == 0) ? choice_sender::outcome::integer
                                            : choice_sender::outcome::string;
     auto result =
         bexec::this_thread::sync_wait_with_variant(choice_sender{selected});
-    CHECK(result.has_value());
+    EXPECT_TRUE(result.has_value());
     if (index % 2 == 0) {
-      CHECK(std::holds_alternative<std::tuple<int>>(*result));
+      EXPECT_TRUE(std::holds_alternative<std::tuple<int>>(*result));
     } else {
-      CHECK(std::holds_alternative<std::tuple<std::string>>(*result));
+      EXPECT_TRUE(std::holds_alternative<std::tuple<std::string>>(*result));
     }
   }
 }

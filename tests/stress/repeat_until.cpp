@@ -17,16 +17,16 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(repeat_until_large_synchronous_iteration_count, stress) {
+TEST(stress, repeat_until_large_synchronous_iteration_count) {
   const int target = stress_iterations(100000);
   int attempts = 0;
   auto result = bexec::this_thread::sync_wait(
       bexec::repeat_until([&] { return bexec::just(++attempts); },
                           [&] { return attempts == target; }));
 
-  CHECK(result.has_value());
-  CHECK(std::get<0>(*result) == target);
-  CHECK(attempts == target);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_TRUE(std::get<0>(*result) == target);
+  EXPECT_TRUE(attempts == target);
 }
 
 }  // namespace bexec_tests

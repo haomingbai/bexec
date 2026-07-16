@@ -22,7 +22,7 @@ bexec::generator<int> pair(int value) {
 
 }  // namespace
 
-BEXEC_TEST_CASE(generator_repeated_create_and_iterate, stress) {
+TEST(stress, generator_repeated_create_and_iterate) {
   const int iterations = stress_iterations(25000);
   long long sum = 0;
 
@@ -32,8 +32,8 @@ BEXEC_TEST_CASE(generator_repeated_create_and_iterate, stress) {
     }
   }
 
-  CHECK(sum == static_cast<long long>(iterations) *
-                   static_cast<long long>(iterations));
+  EXPECT_TRUE(sum == static_cast<long long>(iterations) *
+                         static_cast<long long>(iterations));
 }
 
 }  // namespace bexec_tests

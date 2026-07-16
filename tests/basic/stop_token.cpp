@@ -14,19 +14,19 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(stop_token_registration_and_unregistration, basic) {
+TEST(basic, stop_token_registration_and_unregistration) {
   bexec::inplace_stop_source source;
   auto token = source.get_token();
   int callbacks = 0;
   {
     bexec::inplace_stop_callback callback{token, [&] { ++callbacks; }};
   }
-  CHECK(source.request_stop());
-  CHECK(callbacks == 0);
+  EXPECT_TRUE(source.request_stop());
+  EXPECT_TRUE(callbacks == 0);
 
   bexec::inplace_stop_callback late{token, [&] { ++callbacks; }};
-  CHECK(callbacks == 1);
-  CHECK(!source.request_stop());
+  EXPECT_TRUE(callbacks == 1);
+  EXPECT_TRUE(!source.request_stop());
 }
 
 }  // namespace bexec_tests

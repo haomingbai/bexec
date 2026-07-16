@@ -17,9 +17,10 @@
 - `tests/basic/`: deterministic component and completion-contract tests.
 - `tests/integration/`: multi-component usage scenarios.
 - `tests/stress/`: concurrency, lifecycle, and high-iteration tests.
-- `tests/test_runner.cpp`: shared entry point for every feature executable.
-- `tests/test_support.*` and focused helper headers: shared assertions,
-  registration, test senders, and stress controls.
+- GoogleTest supplies the shared entry point and test registration for every
+  feature executable.
+- `tests/test_support.*` and focused helper headers: shared receivers, test
+  senders, and stress controls.
 - `examples/`: one compiled example case per feature area.
 - `docs/`: usage, design, maintenance, and roadmap documentation.
 
@@ -190,6 +191,10 @@ ctest --test-dir build -L when_all
 ctest --test-dir build -L integration
 BEXEC_STRESS_MULTIPLIER=10 ctest --test-dir build -L stress
 ```
+
+Test sources use GoogleTest's `TEST` and assertion macros. CMake first looks
+for an installed `GTest` package and downloads the pinned fallback only when
+`BEXEC_BUILD_TESTS` is enabled and no package is available.
 
 Stress tests must be bounded at the default multiplier and scale their loop
 counts through `stress_iterations()`. Keep operation timeouts finite and avoid

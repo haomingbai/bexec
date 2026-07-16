@@ -17,7 +17,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(repeat_until_scheduled_retry_pipeline, integration) {
+TEST(integration, repeat_until_scheduled_retry_pipeline) {
   bexec::run_loop loop;
   int attempts = 0;
   auto sender = bexec::repeat_until(
@@ -33,9 +33,9 @@ BEXEC_TEST_CASE(repeat_until_scheduled_retry_pipeline, integration) {
   loop.finish();
   loop.run();
 
-  CHECK(state->signal == signal_kind::value);
-  CHECK(state->int_value == 4);
-  CHECK(attempts == 4);
+  EXPECT_TRUE(state->signal == signal_kind::value);
+  EXPECT_TRUE(state->int_value == 4);
+  EXPECT_TRUE(attempts == 4);
 }
 
 }  // namespace bexec_tests

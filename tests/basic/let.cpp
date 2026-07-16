@@ -67,7 +67,7 @@ class non_movable_value_sender {
 
 }  // namespace
 
-BEXEC_TEST_CASE(let_replacement_paths, basic) {
+TEST(basic, let_replacement_paths) {
   {
     auto state = std::make_shared<shared_state>();
     auto sender = bexec::let_value(
@@ -75,8 +75,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 5);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 5);
   }
 
   {
@@ -88,8 +88,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 3);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 3);
   }
 
   {
@@ -100,7 +100,7 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->signal == signal_kind::error);
   }
 
   {
@@ -110,7 +110,7 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 
   {
@@ -122,8 +122,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 6);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 6);
   }
 
   {
@@ -134,8 +134,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 11);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 11);
   }
 
   {
@@ -145,8 +145,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 23);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 23);
   }
 
   {
@@ -156,7 +156,7 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->signal == signal_kind::error);
   }
 
   {
@@ -168,8 +168,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(static_cast<bool>(state->exception));
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(static_cast<bool>(state->exception));
   }
 
   {
@@ -182,8 +182,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 42);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 42);
   }
 
   {
@@ -196,8 +196,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 22);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 22);
   }
 
   {
@@ -208,8 +208,8 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 10);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 10);
   }
 
   {
@@ -222,11 +222,11 @@ BEXEC_TEST_CASE(let_replacement_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     loop.finish();
     loop.run();
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 10);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 10);
   }
 }
 

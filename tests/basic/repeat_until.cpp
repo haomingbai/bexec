@@ -27,7 +27,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
+TEST(basic, repeat_until_completion_paths) {
   {
     int count = 0;
     auto sender = bexec::repeat_until(
@@ -38,8 +38,8 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(count == 3);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(count == 3);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -52,8 +52,8 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(count == 10000);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(count == 10000);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -72,9 +72,9 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
 
     loop.finish();
     loop.run();
-    CHECK(count == 5);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 5);
+    EXPECT_TRUE(count == 5);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 5);
   }
 
   {
@@ -86,9 +86,9 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(count == 4);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 4);
+    EXPECT_TRUE(count == 4);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 4);
   }
 
   {
@@ -101,9 +101,9 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(count == 2);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->int_value == 2);
+    EXPECT_TRUE(count == 2);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->int_value == 2);
   }
 
   {
@@ -115,7 +115,7 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->signal == signal_kind::error);
   }
 
   {
@@ -126,7 +126,7 @@ BEXEC_TEST_CASE(repeat_until_completion_paths, basic) {
     auto operation = bexec::connect(std::move(sender), any_receiver{state});
     bexec::start(operation);
 
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 }
 

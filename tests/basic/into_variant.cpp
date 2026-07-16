@@ -18,18 +18,19 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(into_variant_value_error_and_stopped_paths, basic) {
+TEST(basic, into_variant_value_error_and_stopped_paths) {
   auto integer = bexec::this_thread::sync_wait_with_variant(
       choice_sender{choice_sender::outcome::integer});
-  CHECK(integer.has_value());
-  CHECK(std::holds_alternative<std::tuple<int>>(*integer));
-  CHECK(std::get<0>(std::get<std::tuple<int>>(*integer)) == 42);
+  EXPECT_TRUE(integer.has_value());
+  EXPECT_TRUE(std::holds_alternative<std::tuple<int>>(*integer));
+  EXPECT_TRUE(std::get<0>(std::get<std::tuple<int>>(*integer)) == 42);
 
   auto string = bexec::this_thread::sync_wait_with_variant(
       choice_sender{choice_sender::outcome::string});
-  CHECK(string.has_value());
-  CHECK(std::holds_alternative<std::tuple<std::string>>(*string));
-  CHECK(std::get<0>(std::get<std::tuple<std::string>>(*string)) == "variant");
+  EXPECT_TRUE(string.has_value());
+  EXPECT_TRUE(std::holds_alternative<std::tuple<std::string>>(*string));
+  EXPECT_TRUE(std::get<0>(std::get<std::tuple<std::string>>(*string)) ==
+              "variant");
 
   bool caught = false;
   try {
@@ -38,11 +39,11 @@ BEXEC_TEST_CASE(into_variant_value_error_and_stopped_paths, basic) {
   } catch (int value) {
     caught = value == 7;
   }
-  CHECK(caught);
+  EXPECT_TRUE(caught);
 
   auto stopped = bexec::this_thread::sync_wait_with_variant(
       choice_sender{choice_sender::outcome::stopped});
-  CHECK(!stopped.has_value());
+  EXPECT_TRUE(!stopped.has_value());
 }
 
 }  // namespace bexec_tests

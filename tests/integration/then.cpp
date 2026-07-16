@@ -17,14 +17,14 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(then_error_recovery_pipeline, integration) {
+TEST(integration, then_error_recovery_pipeline) {
   auto result = bexec::this_thread::sync_wait(
       bexec::just_error(20) |
       bexec::upon_error([](int error) { return error + 1; }) |
       bexec::then([](int value) { return value * 2; }));
 
-  CHECK(result.has_value());
-  CHECK(std::get<0>(*result) == 42);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_TRUE(std::get<0>(*result) == 42);
 }
 
 }  // namespace bexec_tests

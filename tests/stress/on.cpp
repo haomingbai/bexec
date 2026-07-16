@@ -37,7 +37,7 @@ struct scheduled_count_receiver {
 
 }  // namespace
 
-BEXEC_TEST_CASE(on_many_cross_scheduler_completions, stress) {
+TEST(stress, on_many_cross_scheduler_completions) {
   bexec::run_loop target;
   bexec::run_loop final;
   std::atomic<int> completed{0};
@@ -65,7 +65,7 @@ BEXEC_TEST_CASE(on_many_cross_scheduler_completions, stress) {
   target.run();
   final.finish();
   final.run();
-  CHECK(completed.load(std::memory_order_relaxed) == operation_count);
+  EXPECT_TRUE(completed.load(std::memory_order_relaxed) == operation_count);
 }
 
 }  // namespace bexec_tests

@@ -1,6 +1,6 @@
 /**
  * @file tests/test_support.hpp
- * @brief Shared test assertions, receivers, and declarations.
+ * @brief Shared GoogleTest helpers and receivers.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-12
  *
@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Provides the CHECK macro, common receiver state, reusable receiver types,
- * and declarations for each test module.
+ * Provides common receiver state, reusable receiver types, and stress controls
+ * for the GoogleTest-based test suite.
  */
 
 #pragma once
@@ -17,57 +17,19 @@
 #ifndef BEXEC_TESTS_TEST_SUPPORT_HPP_
 #define BEXEC_TESTS_TEST_SUPPORT_HPP_
 
+#include <gtest/gtest.h>
+
 #include <concepts>
-#include <cstddef>
 #include <exception>
-#include <functional>
-#include <iostream>
 #include <memory>
 #include <optional>
 #include <string>
-#include <string_view>
 #include <type_traits>
 #include <utility>
-#include <vector>
 
 namespace bexec_tests {
 
-extern int failures;
-extern std::string_view current_test_case;
-
-#define CHECK(EXPR)                                                        \
-  do {                                                                     \
-    if (!(EXPR)) {                                                         \
-      std::cerr << __FILE__ << ':' << __LINE__ << ": check failed in "     \
-                << ::bexec_tests::current_test_case << ": " #EXPR << '\n'; \
-      ++::bexec_tests::failures;                                           \
-    }                                                                      \
-  } while (false)
-
-enum class test_category { basic, integration, stress };
-
-struct registered_test {
-  std::string_view name;
-  test_category category;
-  void (*function)();
-};
-
-class test_registration {
- public:
-  test_registration(std::string_view name, test_category category,
-                    void (*function)());
-};
-
-const std::vector<registered_test>& registered_tests();
-std::string_view category_name(test_category category) noexcept;
-std::optional<test_category> parse_category(std::string_view value) noexcept;
 int stress_iterations(int base_iterations);
-
-#define BEXEC_TEST_CASE(NAME, CATEGORY)                              \
-  static void NAME();                                                \
-  static const ::bexec_tests::test_registration NAME##_registration{ \
-      #NAME, ::bexec_tests::test_category::CATEGORY, &NAME};         \
-  static void NAME()
 
 enum class signal_kind { none, value, error, stopped };
 

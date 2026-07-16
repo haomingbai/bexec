@@ -17,7 +17,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(run_loop_fifo_and_finish, basic) {
+TEST(basic, run_loop_fifo_and_finish) {
   bexec::run_loop loop;
   std::vector<int> order;
   auto scheduler = loop.get_scheduler();
@@ -36,7 +36,7 @@ BEXEC_TEST_CASE(run_loop_fifo_and_finish, basic) {
   bexec::start(third_operation);
   loop.finish();
   loop.run();
-  CHECK((order == std::vector<int>{1, 2, 3}));
+  EXPECT_TRUE((order == std::vector<int>{1, 2, 3}));
 }
 
 }  // namespace bexec_tests

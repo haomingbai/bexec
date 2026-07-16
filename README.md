@@ -79,7 +79,9 @@ ctest --test-dir build --output-on-failure
 Tests are built as feature targets rather than one monolithic executable.
 CTest registers `basic`, `integration`, and `stress` runs inside every feature:
 the corresponding sources live under `tests/basic/`, `tests/integration/`,
-and `tests/stress/`.
+and `tests/stress/`. The test build uses an installed GoogleTest package when
+available and otherwise downloads a pinned release. GoogleTest is neither
+located nor downloaded when `BEXEC_BUILD_TESTS=OFF`.
 
 ```sh
 # Build all feature tests and independent-header compile checks.

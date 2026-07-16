@@ -19,13 +19,13 @@ bexec::task<int> indexed_task(int value) { co_return value; }
 
 }  // namespace
 
-BEXEC_TEST_CASE(task_repeated_create_start_destroy, stress) {
+TEST(stress, task_repeated_create_start_destroy) {
   const int iterations = stress_iterations(50000);
   for (int index = 0; index != iterations; ++index) {
     auto task = indexed_task(index);
     task.start();
-    CHECK(task.done());
-    CHECK(task.result() == index);
+    EXPECT_TRUE(task.done());
+    EXPECT_TRUE(task.result() == index);
   }
 }
 

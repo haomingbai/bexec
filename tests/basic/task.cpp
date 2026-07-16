@@ -39,25 +39,25 @@ bexec::task<int> await_immediate_senders() {
 
 }  // namespace
 
-BEXEC_TEST_CASE(task_lazy_value_and_void_behavior, basic) {
+TEST(basic, task_lazy_value_and_void_behavior) {
   auto value_task = lazy_value();
 
-  CHECK(!value_task.done());
+  EXPECT_TRUE(!value_task.done());
   value_task.start();
-  CHECK(value_task.done());
-  CHECK(value_task.result() == 42);
+  EXPECT_TRUE(value_task.done());
+  EXPECT_TRUE(value_task.result() == 42);
 
   bool ran = false;
   auto void_task = lazy_void(ran);
-  CHECK(!ran);
-  CHECK(!void_task.done());
+  EXPECT_TRUE(!ran);
+  EXPECT_TRUE(!void_task.done());
   void_task.start();
-  CHECK(void_task.done());
+  EXPECT_TRUE(void_task.done());
   void_task.result();
-  CHECK(ran);
+  EXPECT_TRUE(ran);
 }
 
-BEXEC_TEST_CASE(task_sender_awaitable_shapes, basic) {
+TEST(basic, task_sender_awaitable_shapes) {
   using promise_type = bexec::task<void>::promise_type;
   using value_sender = decltype(bexec::just(1));
   using void_sender = decltype(bexec::just());
@@ -78,8 +78,8 @@ BEXEC_TEST_CASE(task_sender_awaitable_shapes, basic) {
 
   auto task = await_immediate_senders();
   task.start();
-  CHECK(task.done());
-  CHECK(task.result() == 43);
+  EXPECT_TRUE(task.done());
+  EXPECT_TRUE(task.result() == 43);
 }
 
 }  // namespace bexec_tests

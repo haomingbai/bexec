@@ -17,7 +17,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(stop_token_cancels_queued_schedule, integration) {
+TEST(integration, stop_token_cancels_queued_schedule) {
   bexec::run_loop loop;
   bexec::inplace_stop_source source;
   auto state = std::make_shared<shared_state>();
@@ -27,10 +27,10 @@ BEXEC_TEST_CASE(stop_token_cancels_queued_schedule, integration) {
       bexec::connect(bexec::schedule(loop.get_scheduler()), receiver);
 
   bexec::start(operation);
-  CHECK(source.request_stop());
+  EXPECT_TRUE(source.request_stop());
   loop.finish();
   loop.run();
-  CHECK(state->signal == signal_kind::stopped);
+  EXPECT_TRUE(state->signal == signal_kind::stopped);
 }
 
 }  // namespace bexec_tests

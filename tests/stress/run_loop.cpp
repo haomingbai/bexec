@@ -32,7 +32,7 @@ struct atomic_count_receiver {
 
 }  // namespace
 
-BEXEC_TEST_CASE(run_loop_multi_producer_queue, stress) {
+TEST(stress, run_loop_multi_producer_queue) {
   bexec::run_loop loop;
   std::atomic<int> completed{0};
   auto sender = bexec::schedule(loop.get_scheduler());
@@ -68,8 +68,8 @@ BEXEC_TEST_CASE(run_loop_multi_producer_queue, stress) {
   }
   loop.finish();
   runner.join();
-  CHECK(completed.load(std::memory_order_relaxed) ==
-        thread_count * operations_per_thread);
+  EXPECT_TRUE(completed.load(std::memory_order_relaxed) ==
+              thread_count * operations_per_thread);
 }
 
 }  // namespace bexec_tests

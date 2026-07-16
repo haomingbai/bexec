@@ -18,13 +18,13 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(just_composes_with_then_and_sync_wait, integration) {
+TEST(integration, just_composes_with_then_and_sync_wait) {
   auto result = bexec::this_thread::sync_wait(
       bexec::just(std::make_unique<int>(40)) |
       bexec::then([](std::unique_ptr<int> value) { return *value + 2; }));
 
-  CHECK(result.has_value());
-  CHECK(std::get<0>(*result) == 42);
+  EXPECT_TRUE(result.has_value());
+  EXPECT_TRUE(std::get<0>(*result) == 42);
 }
 
 }  // namespace bexec_tests

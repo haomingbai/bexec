@@ -16,7 +16,7 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(vocabulary_query_stability, stress) {
+TEST(stress, vocabulary_query_stability) {
   bexec::run_loop loop;
   bexec::inplace_stop_source source;
   bexec::env_with_scheduler scheduler_env{loop.get_scheduler(),
@@ -25,8 +25,9 @@ BEXEC_TEST_CASE(vocabulary_query_stability, stress) {
 
   const int iterations = stress_iterations(100000);
   for (int index = 0; index != iterations; ++index) {
-    CHECK(bexec::query(env, bexec::get_scheduler) == loop.get_scheduler());
-    CHECK(!bexec::query(env, bexec::get_stop_token).stop_requested());
+    EXPECT_TRUE(bexec::query(env, bexec::get_scheduler) ==
+                loop.get_scheduler());
+    EXPECT_TRUE(!bexec::query(env, bexec::get_stop_token).stop_requested());
   }
 }
 

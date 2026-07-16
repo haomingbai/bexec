@@ -18,16 +18,16 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(counting_scope_repeated_future_lifecycle, stress) {
+TEST(stress, counting_scope_repeated_future_lifecycle) {
   const int iterations = stress_iterations(2000);
   for (int index = 0; index != iterations; ++index) {
     bexec::counting_scope scope;
     auto future = bexec::spawn_future(bexec::just(index), scope.get_token());
     auto result = bexec::this_thread::sync_wait(std::move(future));
-    CHECK(result.has_value());
-    CHECK(std::get<0>(*result) == index);
+    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(std::get<0>(*result) == index);
     scope.close();
-    CHECK(bexec::this_thread::sync_wait(scope.join()).has_value());
+    EXPECT_TRUE(bexec::this_thread::sync_wait(scope.join()).has_value());
   }
 }
 

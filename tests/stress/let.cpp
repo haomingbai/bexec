@@ -17,14 +17,14 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(let_repeated_child_replacement, stress) {
+TEST(stress, let_repeated_child_replacement) {
   const int iterations = stress_iterations(10000);
   for (int index = 0; index != iterations; ++index) {
     auto result = bexec::this_thread::sync_wait(
         bexec::just(index) |
         bexec::let_value([](int value) { return bexec::just(value + 1); }));
-    CHECK(result.has_value());
-    CHECK(std::get<0>(*result) == index + 1);
+    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(std::get<0>(*result) == index + 1);
   }
 }
 

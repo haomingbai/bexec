@@ -17,15 +17,15 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(when_all_repeated_fan_in, stress) {
+TEST(stress, when_all_repeated_fan_in) {
   const int iterations = stress_iterations(10000);
   for (int index = 0; index != iterations; ++index) {
     auto result = bexec::this_thread::sync_wait(bexec::when_all(
         bexec::just(index), bexec::just(index + 1), bexec::just(index + 2)));
-    CHECK(result.has_value());
-    CHECK(std::get<0>(*result) == index);
-    CHECK(std::get<1>(*result) == index + 1);
-    CHECK(std::get<2>(*result) == index + 2);
+    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(std::get<0>(*result) == index);
+    EXPECT_TRUE(std::get<1>(*result) == index + 1);
+    EXPECT_TRUE(std::get<2>(*result) == index + 2);
   }
 }
 

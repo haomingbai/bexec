@@ -7,9 +7,40 @@
 # SPDX-License-Identifier: MIT
 #
 # @details
-# Builds one executable per feature. Each executable contains basic,
-# integration, and stress cases for that feature and is registered three times
-# with CTest so tests can be selected independently by feature or category.
+# Finds an installed GoogleTest package or downloads a pinned release as a
+# fallback, then builds one executable per feature. Each executable contains
+# basic, integration, and stress cases for that feature and is registered three
+# times with CTest so tests can be selected independently by feature or
+# category.
+
+if(NOT TARGET GTest::gtest_main)
+    find_package(GTest QUIET)
+endif()
+
+if(NOT TARGET GTest::gtest_main)
+    include(FetchContent)
+
+    # Keep the fallback dependency limited to the test framework actually used
+    # by bexec. Normal (non-cache) variables avoid changing parent-project
+    # options when bexec itself is included with add_subdirectory().
+    set(BUILD_GMOCK OFF)
+    set(INSTALL_GTEST OFF)
+    set(gtest_build_samples OFF)
+    set(gtest_build_tests OFF)
+    set(gtest_force_shared_crt ON)
+
+    if(POLICY CMP0135)
+        cmake_policy(SET CMP0135 NEW)
+    endif()
+
+    FetchContent_Declare(
+        googletest
+        URL https://github.com/google/googletest/archive/refs/tags/v1.17.0.tar.gz
+        URL_HASH
+            SHA256=65fab701d9829d38cb77c14acdc431d2108bfdbf8979e40eb8ae567edf10b27c
+    )
+    FetchContent_MakeAvailable(googletest)
+endif()
 
 set(BEXEC_TEST_TARGETS)
 
@@ -17,18 +48,25 @@ function(bexec_add_feature_test feature)
     set(target "bexec_test_${feature}")
     add_executable(
         "${target}"
-        test_runner.cpp
         test_support.cpp
         ${ARGN}
     )
-    target_link_libraries("${target}" PRIVATE bexec::bexec)
+    target_link_libraries(
+        "${target}"
+        PRIVATE
+            bexec::bexec
+            GTest::gtest_main
+    )
     target_include_directories("${target}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
     list(APPEND BEXEC_TEST_TARGETS "${target}")
     set(BEXEC_TEST_TARGETS "${BEXEC_TEST_TARGETS}" PARENT_SCOPE)
 
     foreach(category IN ITEMS basic integration stress)
         set(test_name "bexec.${feature}.${category}")
-        add_test(NAME "${test_name}" COMMAND "${target}" "${category}")
+        add_test(
+            NAME "${test_name}"
+            COMMAND "${target}" "--gtest_filter=${category}.*"
+        )
         set_tests_properties(
             "${test_name}"
             PROPERTIES

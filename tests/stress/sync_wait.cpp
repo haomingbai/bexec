@@ -16,12 +16,12 @@
 
 namespace bexec_tests {
 
-BEXEC_TEST_CASE(sync_wait_repeated_local_loop_lifecycle, stress) {
+TEST(stress, sync_wait_repeated_local_loop_lifecycle) {
   const int iterations = stress_iterations(10000);
   for (int index = 0; index != iterations; ++index) {
     auto result = bexec::this_thread::sync_wait(receiver_scheduler_sender{});
-    CHECK(result.has_value());
-    CHECK(std::get<0>(*result) == 42);
+    EXPECT_TRUE(result.has_value());
+    EXPECT_TRUE(std::get<0>(*result) == 42);
   }
 }
 

@@ -208,14 +208,14 @@ environment_task observe_promise_environment(bool& observed) {
 
 }  // namespace
 
-BEXEC_TEST_CASE(task_move_and_exception_propagation, integration) {
+TEST(integration, task_move_and_exception_propagation) {
   auto original = indexed_task(42);
   auto moved = std::move(original);
-  CHECK(original.done());
-  CHECK(!moved.done());
+  EXPECT_TRUE(original.done());
+  EXPECT_TRUE(!moved.done());
   moved.start();
-  CHECK(moved.done());
-  CHECK(moved.result() == 42);
+  EXPECT_TRUE(moved.done());
+  EXPECT_TRUE(moved.result() == 42);
 
   auto failure = throwing_task();
   failure.start();
@@ -225,60 +225,60 @@ BEXEC_TEST_CASE(task_move_and_exception_propagation, integration) {
   } catch (const std::runtime_error&) {
     caught = true;
   }
-  CHECK(caught);
+  EXPECT_TRUE(caught);
 
   int progress = 0;
   auto suspended = twice_suspended_task(progress);
   suspended.start();
-  CHECK(!suspended.done());
-  CHECK(progress == 1);
+  EXPECT_TRUE(!suspended.done());
+  EXPECT_TRUE(progress == 1);
   suspended.start();
-  CHECK(suspended.done());
-  CHECK(progress == 2);
-  CHECK(suspended.result() == 42);
+  EXPECT_TRUE(suspended.done());
+  EXPECT_TRUE(progress == 2);
+  EXPECT_TRUE(suspended.result() == 42);
 }
 
-BEXEC_TEST_CASE(task_awaits_async_sender_and_child_tasks, integration) {
+TEST(integration, task_awaits_async_sender_and_child_tasks) {
   bexec::run_loop loop;
   auto scheduled = scheduled_task(loop);
 
   scheduled.start();
-  CHECK(!scheduled.done());
+  EXPECT_TRUE(!scheduled.done());
 
   loop.finish();
   loop.run();
-  CHECK(scheduled.done());
-  CHECK(scheduled.result() == 42);
+  EXPECT_TRUE(scheduled.done());
+  EXPECT_TRUE(scheduled.result() == 42);
 
   bool child_ran = false;
   auto parent = parent_task(child_ran);
   parent.start();
-  CHECK(parent.done());
-  CHECK(child_ran);
-  CHECK(parent.result() == 42);
+  EXPECT_TRUE(parent.done());
+  EXPECT_TRUE(child_ran);
+  EXPECT_TRUE(parent.result() == 42);
 }
 
-BEXEC_TEST_CASE(task_nested_async_continuation_chain, integration) {
+TEST(integration, task_nested_async_continuation_chain) {
   bexec::run_loop loop;
   int progress = 0;
   auto parent = scheduled_parent_task(loop, progress);
 
   parent.start();
-  CHECK(!parent.done());
-  CHECK(progress == 2);
+  EXPECT_TRUE(!parent.done());
+  EXPECT_TRUE(progress == 2);
 
   loop.finish();
   loop.run();
 
-  CHECK(parent.done());
-  CHECK(progress == 4);
-  CHECK(parent.result() == 42);
+  EXPECT_TRUE(parent.done());
+  EXPECT_TRUE(progress == 4);
+  EXPECT_TRUE(parent.result() == 42);
 }
 
-BEXEC_TEST_CASE(task_sender_error_and_stopped_propagation, integration) {
+TEST(integration, task_sender_error_and_stopped_propagation) {
   auto failed = sender_error_task();
   failed.start();
-  CHECK(failed.done());
+  EXPECT_TRUE(failed.done());
 
   bool caught_error = false;
   try {
@@ -286,13 +286,13 @@ BEXEC_TEST_CASE(task_sender_error_and_stopped_propagation, integration) {
   } catch (const std::runtime_error& error) {
     caught_error = std::string_view{error.what()} == "sender failure";
   }
-  CHECK(caught_error);
+  EXPECT_TRUE(caught_error);
 
   bool continued = false;
   auto stopped = parent_stopped_task(continued);
   stopped.start();
-  CHECK(stopped.done());
-  CHECK(!continued);
+  EXPECT_TRUE(stopped.done());
+  EXPECT_TRUE(!continued);
 
   bool caught_stopped = false;
   try {
@@ -300,40 +300,39 @@ BEXEC_TEST_CASE(task_sender_error_and_stopped_propagation, integration) {
   } catch (const bexec::task_stopped&) {
     caught_stopped = true;
   }
-  CHECK(caught_stopped);
+  EXPECT_TRUE(caught_stopped);
 
   bool caught = false;
   bool catch_continued = false;
   auto inside_catch = stopped_inside_catch(caught, catch_continued);
   inside_catch.start();
-  CHECK(inside_catch.done());
-  CHECK(!caught);
-  CHECK(!catch_continued);
+  EXPECT_TRUE(inside_catch.done());
+  EXPECT_TRUE(!caught);
+  EXPECT_TRUE(!catch_continued);
 
   auto child = stopped_task(catch_continued);
   child.start();
-  CHECK(child.done());
+  EXPECT_TRUE(child.done());
 
   auto await_existing =
       await_stopped_child(std::move(child), caught, catch_continued);
   await_existing.start();
-  CHECK(await_existing.done());
-  CHECK(!caught);
-  CHECK(!catch_continued);
+  EXPECT_TRUE(await_existing.done());
+  EXPECT_TRUE(!caught);
+  EXPECT_TRUE(!catch_continued);
 }
 
-BEXEC_TEST_CASE(task_supports_immovable_operations_and_promise_env,
-                integration) {
+TEST(integration, task_supports_immovable_operations_and_promise_env) {
   auto immovable = immovable_operation_task();
   immovable.start();
-  CHECK(immovable.done());
-  CHECK(immovable.result() == 17);
+  EXPECT_TRUE(immovable.done());
+  EXPECT_TRUE(immovable.result() == 17);
 
   bool observed = false;
   auto environment = observe_promise_environment(observed);
   environment.start();
-  CHECK(environment.done());
-  CHECK(observed);
+  EXPECT_TRUE(environment.done());
+  EXPECT_TRUE(observed);
 }
 
 }  // namespace bexec_tests

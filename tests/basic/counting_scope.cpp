@@ -309,7 +309,7 @@ auto connect_join(bexec::counting_scope& scope, Receiver receiver) {
 
 }  // namespace
 
-BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
+TEST(basic, counting_scope_lifecycle_paths) {
   {
     bexec::simple_counting_scope scope;
     bexec::run_loop loop;
@@ -320,13 +320,13 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
     auto token = scope.get_token();
     auto association = token.try_associate();
-    CHECK(association);
+    EXPECT_TRUE(association);
     association = {};
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(!scope.get_token().try_associate());
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(!scope.get_token().try_associate());
   }
 
   {
@@ -334,7 +334,7 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     bexec::run_loop loop;
     auto token = scope.get_token();
     auto association = token.try_associate();
-    CHECK(association);
+    EXPECT_TRUE(association);
 
     env_receiver<scheduler_env> receiver;
     receiver.env = scheduler_env{loop.get_scheduler()};
@@ -343,17 +343,17 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
 
     bexec::start(operation);
     auto late_association = scope.get_token().try_associate();
-    CHECK(late_association);
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(late_association);
+    EXPECT_TRUE(state->signal == signal_kind::none);
 
     association = {};
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     late_association = {};
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     loop.finish();
     loop.run();
-    CHECK(state->signal == signal_kind::value);
-    CHECK(!scope.get_token().try_associate());
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(!scope.get_token().try_associate());
   }
 
   {
@@ -362,8 +362,8 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto token = scope.get_token();
     auto first_association = token.try_associate();
     auto second_association = token.try_associate();
-    CHECK(first_association);
-    CHECK(second_association);
+    EXPECT_TRUE(first_association);
+    EXPECT_TRUE(second_association);
 
     env_receiver<scheduler_env> first_receiver;
     first_receiver.env = scheduler_env{loop.get_scheduler()};
@@ -382,14 +382,14 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
 
     loop.finish();
     loop.run();
-    CHECK(first_state->signal == signal_kind::value);
-    CHECK(second_state->signal == signal_kind::value);
+    EXPECT_TRUE(first_state->signal == signal_kind::value);
+    EXPECT_TRUE(second_state->signal == signal_kind::value);
   }
 
   {
     bexec::simple_counting_scope scope;
     scope.close();
-    CHECK(!scope.get_token().try_associate());
+    EXPECT_TRUE(!scope.get_token().try_associate());
 
     bexec::run_loop loop;
     env_receiver<scheduler_env> receiver;
@@ -398,16 +398,16 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
     bexec::simple_counting_scope scope;
     auto token = scope.get_token();
     auto association = token.try_associate();
-    CHECK(association);
+    EXPECT_TRUE(association);
     scope.close();
-    CHECK(!scope.get_token().try_associate());
+    EXPECT_TRUE(!scope.get_token().try_associate());
     association = {};
 
     bexec::run_loop loop;
@@ -417,7 +417,7 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -426,8 +426,8 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     scope.request_stop();
 
     bexec::spawn(stop_observing_sender{child_state}, scope.get_token());
-    CHECK(!child_state.value);
-    CHECK(child_state.stopped);
+    EXPECT_TRUE(!child_state.value);
+    EXPECT_TRUE(child_state.stopped);
 
     bexec::run_loop loop;
     env_receiver<scheduler_env> receiver;
@@ -436,15 +436,15 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
     bexec::counting_scope scope;
     lifetime_state child_state;
     bexec::spawn(lifetime_sender{child_state}, scope.get_token());
-    CHECK(child_state.started);
-    CHECK(!child_state.destroyed);
+    EXPECT_TRUE(child_state.started);
+    EXPECT_TRUE(!child_state.destroyed);
 
     bexec::run_loop loop;
     env_receiver<scheduler_env> receiver;
@@ -453,13 +453,13 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     child_state.complete(child_state.operation);
-    CHECK(child_state.destroyed);
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(child_state.destroyed);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     loop.finish();
     loop.run();
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 
   {
@@ -467,7 +467,7 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     scope.close();
     bool started = false;
     bexec::spawn(flag_sender{started}, scope.get_token());
-    CHECK(!started);
+    EXPECT_TRUE(!started);
   }
 
   {
@@ -478,10 +478,10 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto state = receiver.state;
     auto operation = bexec::connect(std::move(future), std::move(receiver));
 
-    CHECK(state->signal == signal_kind::none);
+    EXPECT_TRUE(state->signal == signal_kind::none);
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->first == 42);
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->first == 42);
   }
 
   {
@@ -494,9 +494,9 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = bexec::connect(std::move(future), std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
-    CHECK(state->first == 7);
-    CHECK(state->second == "ready");
+    EXPECT_TRUE(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->first == 7);
+    EXPECT_TRUE(state->second == "ready");
   }
 
   {
@@ -509,8 +509,8 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = bexec::connect(std::move(future), std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::error);
-    CHECK(state->error == "failed");
+    EXPECT_TRUE(state->signal == signal_kind::error);
+    EXPECT_TRUE(state->error == "failed");
   }
 
   {
@@ -522,7 +522,7 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = bexec::connect(std::move(future), std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 
   {
@@ -536,8 +536,8 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = bexec::connect(std::move(future), std::move(receiver));
 
     bexec::start(operation);
-    CHECK(!started);
-    CHECK(state->signal == signal_kind::stopped);
+    EXPECT_TRUE(!started);
+    EXPECT_TRUE(state->signal == signal_kind::stopped);
   }
 
   {
@@ -545,8 +545,8 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     lifetime_state child_state;
     auto future =
         bexec::spawn_future(lifetime_sender{child_state}, scope.get_token());
-    CHECK(child_state.started);
-    CHECK(!child_state.destroyed);
+    EXPECT_TRUE(child_state.started);
+    EXPECT_TRUE(!child_state.destroyed);
 
     bexec::run_loop loop;
     env_receiver<scheduler_env> join_receiver;
@@ -554,11 +554,11 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto join_state = join_receiver.state;
     auto join_operation = connect_join(scope, std::move(join_receiver));
     bexec::start(join_operation);
-    CHECK(join_state->signal == signal_kind::none);
+    EXPECT_TRUE(join_state->signal == signal_kind::none);
 
     child_state.complete(child_state.operation);
-    CHECK(!child_state.destroyed);
-    CHECK(join_state->signal == signal_kind::none);
+    EXPECT_TRUE(!child_state.destroyed);
+    EXPECT_TRUE(join_state->signal == signal_kind::none);
 
     {
       future_receiver receiver;
@@ -566,14 +566,14 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
       auto future_operation =
           bexec::connect(std::move(future), std::move(receiver));
       bexec::start(future_operation);
-      CHECK(state->signal == signal_kind::value);
-      CHECK(join_state->signal == signal_kind::none);
+      EXPECT_TRUE(state->signal == signal_kind::value);
+      EXPECT_TRUE(join_state->signal == signal_kind::none);
     }
 
-    CHECK(child_state.destroyed);
+    EXPECT_TRUE(child_state.destroyed);
     loop.finish();
     loop.run();
-    CHECK(join_state->signal == signal_kind::value);
+    EXPECT_TRUE(join_state->signal == signal_kind::value);
   }
 
   {
@@ -583,15 +583,15 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     {
       auto future = bexec::spawn_future(async_stop_sender{child_state},
                                         scope.get_token());
-      CHECK(child_state.started);
-      CHECK(!child_state.stop_requested);
+      EXPECT_TRUE(child_state.started);
+      EXPECT_TRUE(!child_state.stop_requested);
     }
 
     child_state.check_stop(child_state.operation);
-    CHECK(child_state.stop_requested);
-    CHECK(!child_state.destroyed);
+    EXPECT_TRUE(child_state.stop_requested);
+    EXPECT_TRUE(!child_state.destroyed);
     child_state.complete(child_state.operation);
-    CHECK(child_state.destroyed);
+    EXPECT_TRUE(child_state.destroyed);
 
     bexec::run_loop loop;
     env_receiver<scheduler_env> receiver;
@@ -600,7 +600,7 @@ BEXEC_TEST_CASE(counting_scope_lifecycle_paths, basic) {
     auto operation = connect_join(scope, std::move(receiver));
 
     bexec::start(operation);
-    CHECK(state->signal == signal_kind::value);
+    EXPECT_TRUE(state->signal == signal_kind::value);
   }
 }
 

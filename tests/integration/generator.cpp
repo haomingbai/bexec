@@ -31,13 +31,13 @@ bexec::generator<int> failing_sequence() {
 
 }  // namespace
 
-BEXEC_TEST_CASE(generator_works_with_ranges_algorithms, integration) {
+TEST(integration, generator_works_with_ranges_algorithms) {
   std::vector<int> collected;
   std::ranges::copy(sequence(5), std::back_inserter(collected));
 
-  CHECK(collected.size() == 5);
+  EXPECT_TRUE(collected.size() == 5);
   for (std::size_t index = 0; index != collected.size(); ++index) {
-    CHECK(collected[index] == static_cast<int>(index));
+    EXPECT_TRUE(collected[index] == static_cast<int>(index));
   }
 
   bool caught = false;
@@ -47,7 +47,7 @@ BEXEC_TEST_CASE(generator_works_with_ranges_algorithms, integration) {
   } catch (const std::runtime_error&) {
     caught = true;
   }
-  CHECK(caught);
+  EXPECT_TRUE(caught);
 }
 
 }  // namespace bexec_tests

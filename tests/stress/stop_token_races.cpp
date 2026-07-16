@@ -32,21 +32,21 @@ void wait_until(const std::atomic_bool& flag) {
 
 }  // namespace
 
-BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
+TEST(stress, stop_token_concurrent_race_regressions) {
   bexec::inplace_stop_source source;
   auto token = source.get_token();
 
   int callbacks = 0;
   {
     bexec::inplace_stop_callback callback{token, [&] { ++callbacks; }};
-    CHECK(!token.stop_requested());
-    CHECK(source.request_stop());
-    CHECK(callbacks == 1);
+    EXPECT_TRUE(!token.stop_requested());
+    EXPECT_TRUE(source.request_stop());
+    EXPECT_TRUE(callbacks == 1);
   }
 
   bexec::inplace_stop_callback immediate{token, [&] { ++callbacks; }};
-  CHECK(callbacks == 2);
-  CHECK(token.stop_requested());
+  EXPECT_TRUE(callbacks == 2);
+  EXPECT_TRUE(token.stop_requested());
 
   {
     bexec::inplace_stop_source self_destroy_source;
@@ -62,9 +62,9 @@ BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
 
     registration =
         std::make_unique<callback_type>(self_destroy_token, callback);
-    CHECK(self_destroy_source.request_stop());
-    CHECK(self_destroy_callbacks == 1);
-    CHECK(registration == nullptr);
+    EXPECT_TRUE(self_destroy_source.request_stop());
+    EXPECT_TRUE(self_destroy_callbacks == 1);
+    EXPECT_TRUE(registration == nullptr);
   }
 
   {
@@ -94,8 +94,8 @@ BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
       requester.join();
     }
 
-    CHECK(request_winners.load(std::memory_order_relaxed) == 1);
-    CHECK(concurrent_callbacks.load(std::memory_order_relaxed) == 2);
+    EXPECT_TRUE(request_winners.load(std::memory_order_relaxed) == 1);
+    EXPECT_TRUE(concurrent_callbacks.load(std::memory_order_relaxed) == 2);
   }
 
   {
@@ -124,7 +124,7 @@ BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
       }
 
       requester.join();
-      CHECK(iteration_callbacks.load(std::memory_order_relaxed) <= 1);
+      EXPECT_TRUE(iteration_callbacks.load(std::memory_order_relaxed) <= 1);
     }
   }
 
@@ -134,7 +134,7 @@ BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
     auto late_token = late_source.get_token();
     std::atomic_int late_callbacks{0};
 
-    CHECK(late_source.request_stop());
+    EXPECT_TRUE(late_source.request_stop());
 
     std::vector<std::thread> registrars;
     registrars.reserve(threads);
@@ -150,7 +150,7 @@ BEXEC_TEST_CASE(stop_token_concurrent_race_regressions, stress) {
       registrar.join();
     }
 
-    CHECK(late_callbacks.load(std::memory_order_relaxed) == threads);
+    EXPECT_TRUE(late_callbacks.load(std::memory_order_relaxed) == threads);
   }
 }
 

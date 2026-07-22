@@ -118,7 +118,6 @@ class simple_counting_scope {
   [[nodiscard]] association try_associate() noexcept;
 
   void ensure_destructible() noexcept {
-#ifndef NDEBUG
     const state current = load_state();
     if (current == state::joined) {
       return;
@@ -127,8 +126,7 @@ class simple_counting_scope {
         (current == state::open || current == state::closed)) {
       return;
     }
-    assert(false);
-#endif
+    std::terminate();
   }
 
   void disassociate() noexcept { release_count(); }

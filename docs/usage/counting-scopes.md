@@ -142,9 +142,19 @@ environment; `this_thread::sync_wait(scope.join())` satisfies this requirement.
 
 ### Destruction
 
-Destroying a scope while it has outstanding associations or a pending join
-terminates the program.
-Callers must close and join scopes that have accepted work before destroying them.
+Scope destruction follows the C++26 `simple_counting_scope` /
+`counting_scope` contract. A scope that has accepted work must be closed and
+its started `join()` sender must complete before destruction; merely creating a
+join sender is not sufficient. At destruction, the only valid scope states are
+`unused`, `unused-and-closed`, and `joined`; otherwise the standard contract
+requires `std::terminate()`.
+
+Scope tokens and associations do not own the scope. Do not retain or use them
+after the associated scope has been destroyed.
+
+bexec enforces this invariant with `std::terminate()` in every build
+configuration. Treat `close()` plus completion of a started `join()` as
+mandatory in every build configuration.
 
 ## `simple_counting_scope` vs `counting_scope`
 

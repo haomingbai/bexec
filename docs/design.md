@@ -571,10 +571,17 @@ stateDiagram-v2
     note right of joined: join complete
 ```
 
-Scope destruction is intentionally strict. Destroying a scope while it is open,
-closed-but-associated, or waiting for a join completion terminates the program.
-This keeps detached work from outliving the scope object that owns its lifetime
-contract.
+Scope destruction is intentionally strict and follows the C++26
+`simple_counting_scope` / `counting_scope` contract. After a scope has accepted
+work, callers must call `close()` and wait for a started `join()` sender to
+complete before destruction. Destruction is valid only for an `unused`,
+`unused-and-closed`, or `joined` scope; the standard contract requires
+`std::terminate()` for every other state. Tokens and associations are
+non-owning, so they must not be retained or used after the scope is destroyed.
+
+bexec enforces this invariant with `std::terminate()` in every build
+configuration. This is a fail-fast lifetime boundary, not an alternative scope
+policy.
 
 `spawn(sender, token, env)` is the detached form. It obtains an association,
 allocates an operation through `get_allocator(env)`, wraps the input sender

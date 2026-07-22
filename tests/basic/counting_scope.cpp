@@ -17,6 +17,7 @@
 #include <bexec/run_loop.hpp>
 #include <bexec/sender.hpp>
 #include <memory>
+#include <optional>
 #include <string>
 #include <utility>
 
@@ -602,6 +603,28 @@ TEST(basic, counting_scope_lifecycle_paths) {
     bexec::start(operation);
     EXPECT_EQ(state->signal, signal_kind::value);
   }
+}
+
+TEST(basic, counting_scope_destruction_enforces_lifecycle) {
+  EXPECT_DEATH(
+      {
+        std::optional<bexec::simple_counting_scope::association> association;
+        {
+          bexec::simple_counting_scope scope;
+          association.emplace(scope.get_token().try_associate());
+        }
+      },
+      "");
+
+  EXPECT_DEATH(
+      {
+        std::optional<bexec::counting_scope::association> association;
+        {
+          bexec::counting_scope scope;
+          association.emplace(scope.get_token().try_associate());
+        }
+      },
+      "");
 }
 
 }  // namespace bexec_tests

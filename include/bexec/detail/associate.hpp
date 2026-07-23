@@ -382,7 +382,9 @@ class spawn_receiver {
  *
  * The wrapped child is connected before try_associate() is evaluated. If
  * association succeeds, start() starts the already-connected operation;
- * otherwise it destroys the state without starting the child.
+ * otherwise it destroys the state without starting the child. A one-bit
+ * rendezvous lets the child-completion path and the start-return path decide
+ * without a mutex which one releases the heap state.
  */
 template <class Sender, class Token, class Env, class ByteAllocator>
 class spawn_operation {
@@ -411,23 +413,12 @@ class spawn_operation {
 
   void start() noexcept {
     if (!association_) {
-      complete();
+      finish();
       return;
     }
 
-    bool complete_now = false;
-    {
-      std::lock_guard lock(mutex_);
-      starting_ = true;
-    }
     bexec::start(operation_);
-    {
-      std::lock_guard lock(mutex_);
-      starting_ = false;
-      complete_now = completed_;
-    }
-
-    if (complete_now) {
+    if (release_arrived_.test_and_set(std::memory_order_acq_rel)) {
       finish();
     }
   }
@@ -438,17 +429,7 @@ class spawn_operation {
   }
 
   void complete() noexcept {
-    bool complete_now = false;
-    {
-      std::lock_guard lock(mutex_);
-      if (starting_) {
-        completed_ = true;
-      } else {
-        complete_now = true;
-      }
-    }
-
-    if (complete_now) {
+    if (release_arrived_.test_and_set(std::memory_order_acq_rel)) {
       finish();
     }
   }
@@ -466,9 +447,9 @@ class spawn_operation {
   allocator_type allocator_;
   child_operation_type operation_;
   association_type association_;
-  std::mutex mutex_;
-  bool starting_{false};
-  bool completed_{false};
+  // A successful spawn has exactly two arrivals: child start returns and the
+  // child sends its sole terminal completion. The second arrival owns finish().
+  std::atomic_flag release_arrived_ = ATOMIC_FLAG_INIT;
 };
 
 template <class Sender, class Token, class Env>

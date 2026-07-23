@@ -17,9 +17,12 @@
 #include <bexec/receiver.hpp>
 #include <bexec/run_loop.hpp>
 #include <bexec/sender.hpp>
+#include <condition_variable>
 #include <memory>
+#include <mutex>
 #include <optional>
 #include <string>
+#include <thread>
 #include <utility>
 
 #include "test_support.hpp"
@@ -204,6 +207,82 @@ class lifetime_sender {
 
  private:
   lifetime_state* state_;
+};
+
+struct concurrent_completion_state {
+  std::mutex mutex;
+  std::condition_variable condition;
+  bool start_entered{false};
+  bool allow_start_return{false};
+  bool start_returned{false};
+  bool completion_returned{false};
+  bool child_destroyed{false};
+  bool child_destroyed_before_start_return{false};
+  void* operation{nullptr};
+  void (*complete)(void*) noexcept {nullptr};
+};
+
+class concurrent_completion_sender {
+ public:
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t()>;
+
+  explicit concurrent_completion_sender(
+      concurrent_completion_state& state) noexcept
+      : state_(&state) {}
+
+  template <class Receiver>
+  class operation {
+   public:
+    operation(concurrent_completion_state& state, Receiver receiver)
+        : state_(&state), receiver_(std::move(receiver)) {}
+
+    operation(const operation&) = delete;
+    operation& operator=(const operation&) = delete;
+    operation(operation&&) = delete;
+    operation& operator=(operation&&) = delete;
+
+    ~operation() {
+      std::lock_guard lock(state_->mutex);
+      state_->child_destroyed = true;
+      state_->child_destroyed_before_start_return = !state_->start_returned;
+      state_->condition.notify_all();
+    }
+
+    void start() noexcept {
+      std::unique_lock lock(state_->mutex);
+      state_->operation = this;
+      state_->complete = [](void* raw) noexcept {
+        static_cast<operation*>(raw)->complete();
+      };
+      state_->start_entered = true;
+      state_->condition.notify_all();
+      state_->condition.wait(lock,
+                             [this] { return state_->allow_start_return; });
+      state_->start_returned = true;
+      state_->condition.notify_all();
+    }
+
+   private:
+    void complete() noexcept {
+      bexec::set_value(std::move(receiver_));
+
+      std::lock_guard lock(state_->mutex);
+      state_->completion_returned = true;
+      state_->condition.notify_all();
+    }
+
+    concurrent_completion_state* state_;
+    Receiver receiver_;
+  };
+
+  template <class Receiver>
+  auto connect(Receiver receiver) const {
+    return operation<Receiver>{*state_, std::move(receiver)};
+  }
+
+ private:
+  concurrent_completion_state* state_;
 };
 
 class flag_sender {
@@ -658,6 +737,54 @@ TEST(basic, counting_scope_lifecycle_paths) {
     bexec::start(operation);
     EXPECT_EQ(state->signal, signal_kind::value);
   }
+}
+
+TEST(basic, counting_scope_spawn_waits_for_start_before_releasing_state) {
+  bexec::simple_counting_scope scope;
+  concurrent_completion_state child_state;
+
+  std::thread starter([&] {
+    bexec::spawn(concurrent_completion_sender{child_state}, scope.get_token());
+  });
+
+  void* child_operation = nullptr;
+  void (*complete)(void*) noexcept = nullptr;
+  {
+    std::unique_lock lock(child_state.mutex);
+    child_state.condition.wait(lock, [&] { return child_state.start_entered; });
+    child_operation = child_state.operation;
+    complete = child_state.complete;
+  }
+
+  std::thread completer([&] { complete(child_operation); });
+
+  {
+    std::unique_lock lock(child_state.mutex);
+    child_state.condition.wait(lock,
+                               [&] { return child_state.completion_returned; });
+    EXPECT_FALSE(child_state.child_destroyed);
+    child_state.allow_start_return = true;
+    child_state.condition.notify_all();
+  }
+
+  completer.join();
+  starter.join();
+
+  {
+    std::lock_guard lock(child_state.mutex);
+    EXPECT_TRUE(child_state.start_returned);
+    EXPECT_TRUE(child_state.child_destroyed);
+    EXPECT_FALSE(child_state.child_destroyed_before_start_return);
+  }
+
+  scope.close();
+  bexec::run_loop loop;
+  env_receiver<scheduler_env> receiver;
+  receiver.env = scheduler_env{loop.get_scheduler()};
+  auto state = receiver.state;
+  auto join_operation = connect_join(scope, std::move(receiver));
+  bexec::start(join_operation);
+  EXPECT_EQ(state->signal, signal_kind::value);
 }
 
 TEST(basic, counting_scope_associate_marks_sender_and_reports_rejection) {

@@ -30,7 +30,10 @@ if [[ "${#EXISTING_DIRS[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-mapfile -t FILES < <(
+FILES=()
+while IFS= read -r file; do
+  FILES+=("${file}")
+done < <(
   find "${EXISTING_DIRS[@]}" -type f \
     \( -name '*.c' -o -name '*.cc' -o -name '*.cpp' -o -name '*.cxx' \
     -o -name '*.h' -o -name '*.hh' -o -name '*.hpp' -o -name '*.hxx' \) \

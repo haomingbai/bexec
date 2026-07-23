@@ -29,8 +29,7 @@ TEST(basic, into_variant_value_error_and_stopped_paths) {
       choice_sender{choice_sender::outcome::string});
   ASSERT_TRUE(string.has_value());
   EXPECT_TRUE(std::holds_alternative<std::tuple<std::string>>(*string));
-  EXPECT_EQ(std::get<0>(std::get<std::tuple<std::string>>(*string)),
-            "variant");
+  EXPECT_EQ(std::get<0>(std::get<std::tuple<std::string>>(*string)), "variant");
 
   bool caught = false;
   try {

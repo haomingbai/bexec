@@ -33,7 +33,7 @@ TEST(stress, generator_repeated_create_and_iterate) {
   }
 
   EXPECT_EQ(sum, static_cast<long long>(iterations) *
-                         static_cast<long long>(iterations));
+                     static_cast<long long>(iterations));
 }
 
 }  // namespace bexec_tests

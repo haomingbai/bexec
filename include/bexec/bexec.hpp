@@ -17,6 +17,7 @@
 #ifndef BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
 #define BEXEC_INCLUDE_BEXEC_BEXEC_HPP_
 
+#include <bexec/associate.hpp>
 #include <bexec/awaitable.hpp>
 #include <bexec/completion_signatures.hpp>
 #include <bexec/concepts.hpp>

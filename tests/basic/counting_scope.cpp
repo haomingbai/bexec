@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+#include <bexec/associate.hpp>
 #include <bexec/completion_signatures.hpp>
 #include <bexec/counting_scope.hpp>
 #include <bexec/just.hpp>
@@ -50,6 +51,8 @@ using counting_scope_token_type =
     decltype(std::declval<bexec::counting_scope&>().get_token());
 using counting_scope_association_type =
     decltype(std::declval<const counting_scope_token_type&>().try_associate());
+using associated_just_sender_type = decltype(bexec::associate(
+    bexec::just(42), std::declval<counting_scope_token_type>()));
 
 static_assert(bexec::sender<join_sender_type>);
 static_assert(!bexec::sender_to<join_sender_type, any_receiver>);
@@ -57,6 +60,10 @@ static_assert(bexec::scope_token<simple_scope_token_type>);
 static_assert(bexec::scope_token<counting_scope_token_type>);
 static_assert(bexec::scope_association<simple_scope_association_type>);
 static_assert(bexec::scope_association<counting_scope_association_type>);
+static_assert(bexec::sender<associated_just_sender_type>);
+static_assert(bexec::sends_stopped<associated_just_sender_type>);
+static_assert(std::move_constructible<associated_just_sender_type>);
+static_assert(std::copy_constructible<associated_just_sender_type>);
 
 struct stop_observer_state {
   bool value{false};
@@ -98,6 +105,14 @@ struct future_receiver {
   }
 
   void set_stopped() noexcept { state->signal = signal_kind::stopped; }
+};
+
+struct stoppable_future_receiver : future_receiver {
+  bexec::inplace_stop_token stop_token;
+
+  [[nodiscard]] auto get_env() const noexcept {
+    return bexec::env_with_stop_token{stop_token};
+  }
 };
 
 class stop_observing_sender {
@@ -221,6 +236,46 @@ class flag_sender {
 
  private:
   bool* started_;
+};
+
+struct connect_tracking_state {
+  bool connected{false};
+  bool started{false};
+};
+
+class connect_tracking_sender {
+ public:
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t()>;
+
+  explicit connect_tracking_sender(connect_tracking_state& state) noexcept
+      : state_(&state) {}
+
+  template <class Receiver>
+  class operation {
+   public:
+    operation(connect_tracking_state& state, Receiver receiver)
+        : state_(&state), receiver_(std::move(receiver)) {
+      state_->connected = true;
+    }
+
+    void start() noexcept {
+      state_->started = true;
+      bexec::set_value(std::move(receiver_));
+    }
+
+   private:
+    connect_tracking_state* state_;
+    Receiver receiver_;
+  };
+
+  template <class Receiver>
+  auto connect(Receiver receiver) const {
+    return operation<Receiver>{*state_, std::move(receiver)};
+  }
+
+ private:
+  connect_tracking_state* state_;
 };
 
 struct async_stop_state {
@@ -603,6 +658,115 @@ TEST(basic, counting_scope_lifecycle_paths) {
     bexec::start(operation);
     EXPECT_EQ(state->signal, signal_kind::value);
   }
+}
+
+TEST(basic, counting_scope_associate_marks_sender_and_reports_rejection) {
+  {
+    bexec::simple_counting_scope scope;
+    {
+      bool started = false;
+      auto associated =
+          bexec::associate(flag_sender{started}, scope.get_token());
+
+      future_receiver receiver;
+      auto state = receiver.state;
+      auto operation =
+          bexec::connect(std::move(associated), std::move(receiver));
+
+      EXPECT_FALSE(started);
+      bexec::start(operation);
+      EXPECT_TRUE(started);
+      EXPECT_EQ(state->signal, signal_kind::value);
+    }
+
+    scope.close();
+    bexec::run_loop loop;
+    env_receiver<scheduler_env> receiver;
+    receiver.env = scheduler_env{loop.get_scheduler()};
+    auto state = receiver.state;
+    auto join_operation = connect_join(scope, std::move(receiver));
+    bexec::start(join_operation);
+    EXPECT_EQ(state->signal, signal_kind::value);
+  }
+
+  {
+    bexec::simple_counting_scope scope;
+    scope.close();
+    connect_tracking_state child_state;
+    auto associated = connect_tracking_sender{child_state} |
+                      bexec::associate(scope.get_token());
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(associated), std::move(receiver));
+
+    bexec::start(operation);
+    EXPECT_FALSE(child_state.connected);
+    EXPECT_FALSE(child_state.started);
+    EXPECT_EQ(state->signal, signal_kind::stopped);
+  }
+}
+
+TEST(basic, counting_scope_spawn_connects_before_rejected_association) {
+  {
+    bexec::simple_counting_scope scope;
+    scope.close();
+    connect_tracking_state child_state;
+
+    bexec::spawn(connect_tracking_sender{child_state}, scope.get_token());
+
+    EXPECT_TRUE(child_state.connected);
+    EXPECT_FALSE(child_state.started);
+  }
+
+  {
+    bexec::simple_counting_scope scope;
+    scope.close();
+    connect_tracking_state child_state;
+    auto future = bexec::spawn_future(connect_tracking_sender{child_state},
+                                      scope.get_token());
+
+    EXPECT_TRUE(child_state.connected);
+    EXPECT_FALSE(child_state.started);
+
+    future_receiver receiver;
+    auto state = receiver.state;
+    auto operation = bexec::connect(std::move(future), std::move(receiver));
+    bexec::start(operation);
+    EXPECT_EQ(state->signal, signal_kind::stopped);
+  }
+}
+
+TEST(basic, counting_scope_spawn_future_forwards_downstream_stop) {
+  bexec::counting_scope scope;
+  async_stop_state child_state;
+  auto future =
+      bexec::spawn_future(async_stop_sender{child_state}, scope.get_token());
+  ASSERT_TRUE(child_state.started);
+
+  bexec::inplace_stop_source stop_source;
+  stoppable_future_receiver receiver;
+  receiver.stop_token = stop_source.get_token();
+  auto state = receiver.state;
+  auto operation = bexec::connect(std::move(future), std::move(receiver));
+  bexec::start(operation);
+
+  stop_source.request_stop();
+  EXPECT_EQ(state->signal, signal_kind::stopped);
+
+  child_state.check_stop(child_state.operation);
+  EXPECT_TRUE(child_state.stop_requested);
+  child_state.complete(child_state.operation);
+  EXPECT_TRUE(child_state.destroyed);
+
+  scope.close();
+  bexec::run_loop loop;
+  env_receiver<scheduler_env> join_receiver;
+  join_receiver.env = scheduler_env{loop.get_scheduler()};
+  auto join_state = join_receiver.state;
+  auto join_operation = connect_join(scope, std::move(join_receiver));
+  bexec::start(join_operation);
+  EXPECT_EQ(join_state->signal, signal_kind::value);
 }
 
 TEST(basic, counting_scope_destruction_enforces_lifecycle) {

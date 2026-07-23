@@ -41,6 +41,7 @@ graph TB
 
     subgraph "Scopes"
         SCOPE["counting_scope"]
+        ASSOCIATE["associate(sender, token)"]
         SPAWN["spawn(sender, token)"]
         SPAWN_F["spawn_future(sender, token)"]
     end
@@ -63,6 +64,7 @@ graph TB
     THEN --> WHEN_ALL
     LET_V --> WHEN_ALL
     STARTS_ON --> SYNC_WAIT
+    SCOPE --> ASSOCIATE
     SCOPE --> SPAWN
     SCOPE --> SPAWN_F
     CONNECT --> START
@@ -102,7 +104,7 @@ bexec::start(op);
 | [environments.md](environments.md) | Environment queries: `get_env`, `get_stop_token`, `get_allocator`, `get_scheduler`, environment wrappers |
 | [concepts-and-metadata.md](concepts-and-metadata.md) | Concept constraints, completion signature introspection |
 | [algorithms.md](algorithms.md) | `when_all`, `when_all_with_variant`, `repeat_until` |
-| [counting-scopes.md](counting-scopes.md) | `counting_scope`, `simple_counting_scope`, `spawn`, `spawn_future` |
+| [counting-scopes.md](counting-scopes.md) | `counting_scope`, `simple_counting_scope`, `associate`, `spawn`, `spawn_future` |
 | [coroutines.md](coroutines.md) | Sender awaiting, `task<T>`, and synchronous `generator<T>` |
 
 ## Other Documentation

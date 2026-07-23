@@ -19,8 +19,8 @@ P2300-inspired library.
 
 ## Async Scopes
 
-- Add public `associate`, `let_async_scope`, and async-scope adaptor closures
-  when real call sites need them.
+- Add `let_async_scope` and async-scope adaptor closures when real call sites
+  need them.
 - Track standard `stop-when` and environment-writing facilities as the local
   sender model grows beyond the current minimal wrappers.
 - Add more stress tests for `spawn_future` races between completion, consume,

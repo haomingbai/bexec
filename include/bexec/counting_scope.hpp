@@ -1,6 +1,6 @@
 /**
  * @file include/bexec/counting_scope.hpp
- * @brief Standard-style counting scopes and detached spawn.
+ * @brief Standard-style counting scopes and spawn consumer CPOs.
  * @author Haoming Bai <haomingbai@hotmail.com>
  * @date   2026-05-22
  *
@@ -14,6 +14,7 @@
 #define BEXEC_INCLUDE_BEXEC_COUNTING_SCOPE_HPP_
 
 #include <atomic>
+#include <bexec/associate.hpp>
 #include <bexec/completion_signatures.hpp>
 #include <bexec/detail/config.hpp>
 #include <bexec/detail/counting_scope.hpp>
@@ -35,33 +36,6 @@
 #include <utility>
 
 namespace bexec {
-
-template <class Assoc>
-concept scope_association =
-    std::movable<detail::remove_cvref_t<Assoc>> &&
-    std::is_nothrow_move_constructible_v<detail::remove_cvref_t<Assoc>> &&
-    std::is_nothrow_move_assignable_v<detail::remove_cvref_t<Assoc>> &&
-    std::is_nothrow_default_constructible_v<detail::remove_cvref_t<Assoc>> &&
-    std::default_initializable<detail::remove_cvref_t<Assoc>> &&
-    requires(const detail::remove_cvref_t<Assoc>& assoc) {
-      { static_cast<bool>(assoc) } noexcept;
-      {
-        assoc.try_associate()
-      } noexcept -> std::same_as<detail::remove_cvref_t<Assoc>>;
-    };
-
-template <class Token>
-concept scope_token =
-    std::copyable<detail::remove_cvref_t<Token>> &&
-    std::is_nothrow_copy_constructible_v<detail::remove_cvref_t<Token>> &&
-    std::is_nothrow_move_constructible_v<detail::remove_cvref_t<Token>> &&
-    std::is_nothrow_copy_assignable_v<detail::remove_cvref_t<Token>> &&
-    std::is_nothrow_move_assignable_v<detail::remove_cvref_t<Token>> &&
-    requires(const detail::remove_cvref_t<Token>& token,
-             detail::scope_token_test_sender sender) {
-      { token.try_associate() } noexcept -> scope_association;
-      { token.wrap(std::move(sender)) } noexcept -> bexec::sender;
-    };
 
 class simple_counting_scope {
  public:
@@ -556,53 +530,21 @@ inline counting_scope::token counting_scope::get_token() noexcept {
 
 struct spawn_t {
   template <sender Sender, scope_token Token>
-    requires detail::spawnable_sender_v<detail::remove_cvref_t<Sender>>
+    requires detail::spawnable_sender_v<
+        detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
+            std::declval<const Token&>(), std::declval<Sender>()))>>
   void operator()(Sender&& sender, Token token) const {
-    (*this)(std::forward<Sender>(sender), std::move(token), empty_env{});
+    detail::spawn(std::forward<Sender>(sender), std::move(token), empty_env{});
   }
 
   template <sender Sender, scope_token Token, class Env>
-    requires detail::spawnable_sender_v<detail::remove_cvref_t<Sender>> &&
+    requires detail::spawnable_sender_v<
+                 detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
+                     std::declval<const Token&>(), std::declval<Sender>()))>> &&
              std::copy_constructible<detail::remove_cvref_t<Env>>
   void operator()(Sender&& sender, Token token, Env&& env) const {
-    using env_type = detail::remove_cvref_t<Env>;
-    env_type env_object{std::forward<Env>(env)};
-    using byte_allocator = decltype(bexec::get_allocator(env_object));
-    using association_type = decltype(token.try_associate());
-    using wrapped_sender_type =
-        detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
-            token, std::forward<Sender>(sender)))>;
-    using operation_type =
-        detail::spawn_operation<wrapped_sender_type, association_type, env_type,
-                                byte_allocator>;
-    using allocator_type = typename operation_type::allocator_type;
-    using allocator_traits = std::allocator_traits<allocator_type>;
-
-    auto association = token.try_associate();
-    if (!association) {
-      return;
-    }
-
-    auto wrapped_sender =
-        detail::wrap_scope_sender(token, std::forward<Sender>(sender));
-    byte_allocator byte_alloc = bexec::get_allocator(env_object);
-    allocator_type allocator{byte_alloc};
-    operation_type* operation = allocator_traits::allocate(allocator, 1);
-
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      allocator_traits::construct(
-          allocator, operation, std::move(wrapped_sender),
-          std::move(association), std::move(env_object), allocator);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      allocator_traits::deallocate(allocator, operation, 1);
-      throw;
-    }
-#endif
-
-    operation->start();
+    detail::spawn(std::forward<Sender>(sender), std::move(token),
+                  std::forward<Env>(env));
   }
 };
 
@@ -611,45 +553,14 @@ inline constexpr spawn_t spawn{};
 struct spawn_future_t {
   template <sender Sender, scope_token Token>
   [[nodiscard]] auto operator()(Sender&& sender, Token token) const {
-    return (*this)(std::forward<Sender>(sender), std::move(token), empty_env{});
+    return detail::spawn_future(std::forward<Sender>(sender), std::move(token),
+                                empty_env{});
   }
 
   template <sender Sender, scope_token Token, class Env>
   [[nodiscard]] auto operator()(Sender&& sender, Token token, Env&& env) const {
-    using env_type = detail::remove_cvref_t<Env>;
-    env_type env_object{std::forward<Env>(env)};
-    auto wrapped_sender =
-        detail::wrap_scope_sender(token, std::forward<Sender>(sender));
-
-    using byte_allocator = decltype(bexec::get_allocator(env_object));
-    using wrapped_sender_type =
-        detail::remove_cvref_t<decltype(wrapped_sender)>;
-    using token_type = detail::remove_cvref_t<Token>;
-    using state_type =
-        detail::spawn_future_state<wrapped_sender_type, token_type, env_type,
-                                   byte_allocator>;
-    using allocator_type = typename state_type::allocator_type;
-    using allocator_traits = std::allocator_traits<allocator_type>;
-
-    byte_allocator byte_alloc = bexec::get_allocator(env_object);
-    allocator_type allocator{byte_alloc};
-    state_type* state = allocator_traits::allocate(allocator, 1);
-
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      allocator_traits::construct(allocator, state, std::move(byte_alloc),
-                                  std::move(wrapped_sender), std::move(token),
-                                  std::move(env_object));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      allocator_traits::deallocate(allocator, state, 1);
-      throw;
-    }
-#endif
-
-    return detail::spawn_future_sender<state_type>{
-        detail::spawn_future_state_handle<state_type>{state}};
+    return detail::spawn_future(std::forward<Sender>(sender), std::move(token),
+                                std::forward<Env>(env));
   }
 };
 

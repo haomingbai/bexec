@@ -18,7 +18,7 @@ graph TB
         SENDERS["Sender Factories<br/>just / just_error / just_stopped"]
         ADAPTORS["Adaptors<br/>then / upon_* / let_*<br/>into_variant / when_all<br/>repeat_until / starts_on / on"]
         SCHED["Scheduling<br/>run_loop / sync_wait"]
-        SCOPES["Scopes<br/>counting_scope / spawn / spawn_future"]
+        SCOPES["Scopes<br/>counting_scope / associate<br/>spawn / spawn_future"]
         TASK["Coroutines<br/>task&lt;T&gt; / generator&lt;T&gt;<br/>sender awaitables"]
     end
 
@@ -72,6 +72,9 @@ member-based:
 - `query(env, tag)` invokes the query object, so `query(env, get_stop_token)`
   and `get_stop_token(env)` use the same path. `get_allocator` follows the
   same query path and falls back to `std::allocator<std::byte>`.
+- `associate(sender, token)` is a pipeable scope sender adaptor. `spawn` and
+  `spawn_future` are scope consumer CPOs; neither is a sender member
+  customization point.
 
 There is no `tag_invoke` support. This is intentional. It keeps overload
 resolution easy to reason about, keeps diagnostics smaller, and avoids exposing
@@ -583,18 +586,27 @@ bexec enforces this invariant with `std::terminate()` in every build
 configuration. This is a fail-fast lifetime boundary, not an alternative scope
 policy.
 
-`spawn(sender, token, env)` is the detached form. It obtains an association,
-allocates an operation through `get_allocator(env)`, wraps the input sender
-with the token, and eagerly starts it. The detached receiver accepts only
-`set_value()` and `set_stopped()`; either terminal signal destroys the child
-operation and releases the association.
+`associate(sender, token)` first wraps the input sender through the token and
+then attempts to obtain an association. It returns an unspecified pipeable
+sender adaptor result rather than exposing a concrete associated-sender type.
+When association is accepted, connecting that sender creates an operation that
+owns the association and forwards the wrapped child completions. When
+association is rejected, starting its operation sends `set_stopped()` without
+connecting or starting the child. The adaptor therefore adds `set_stopped()` to
+the wrapped sender's completion set.
 
-`spawn_future(sender, token, env)` follows the C++ standard wording shape. It
-first constructs the wrapped child operation, then attempts to associate with
-the scope. If association fails, the child is not started and the future state
-stores `set_stopped()`. If association succeeds, the child is eagerly started
-and its terminal signal is stored in a `std::variant` of decayed completion
-tuples.
+`spawn(sender, token, env)` is an independent detached consumer CPO. Its
+heap-backed state first connects `token.wrap(sender)` to the detached receiver,
+then calls `token.try_associate()`. Only a successful association starts the
+already-connected operation; a rejected association destroys the state without
+starting the child. The detached receiver accepts only `set_value()` and
+`set_stopped()`, and either terminal signal releases the association after the
+allocation is no longer used.
+
+`spawn_future(sender, token, env)` has the same connection-before-association
+order. Its future state connects the wrapped child, attempts association, and
+starts only on success; otherwise it stores `set_stopped()`. A successful child
+terminal signal is stored in a `std::variant` of decayed completion tuples.
 
 The returned future sender is move-only and one-shot. Its heap state supports
 three serialized operations:
@@ -605,6 +617,8 @@ three serialized operations:
   stored result.
 - `abandon`: requests stop through the future state's internal stop source if
   the child has not completed; otherwise it destroys the state.
+- `try_cancel`: reacts to downstream stop by requesting child stop and
+  completing a registered future receiver with `set_stopped()`.
 
 Abandoning the future does not complete the future receiver with stopped. It
 only requests stop for the child. The scope association remains held until the

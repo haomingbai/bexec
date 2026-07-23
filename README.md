@@ -48,8 +48,9 @@ environment queries, sender factories/adaptors, and focused tests.
   first-terminal stop propagation, and downstream cancellation propagation.
 - `when_all_with_variant` for child senders with multiple value alternatives.
 - `starts_on(scheduler, sender)` and `on(scheduler, sender)`.
-- Standard-style `simple_counting_scope`, `counting_scope`, detached `spawn`,
-  and `spawn_future` for scope-tracked eager work.
+- Standard-style `simple_counting_scope`, `counting_scope`, public
+  `associate`, detached `spawn`, and `spawn_future` for scope-tracked eager
+  work.
 - `bexec::this_thread::sync_wait(sender)` and
   `bexec::this_thread::sync_wait_with_variant(sender)`.
 - Coroutine integration:
@@ -63,8 +64,8 @@ environment queries, sender factories/adaptors, and focused tests.
 - It is not a complete implementation of P2300.
 - It does not use `tag_invoke`.
 - It does not depend on `stdexec`.
-- It does not provide domains, bulk execution, public `associate`,
-  `let_async_scope`, advanced scheduler properties, or ABI-stable boundaries.
+- It does not provide domains, bulk execution, `let_async_scope`, advanced
+  scheduler properties, or ABI-stable boundaries.
 - It does not provide the nonstandard `bexec::sync_wait` alias or
   `on(sender, scheduler)` overload.
 
@@ -214,12 +215,17 @@ loop.run();
 - Plain `when_all` requires each child to have at most one value completion
   alternative. Use `when_all_with_variant` when a child has multiple possible
   value shapes.
-- `spawn(sender, token, env)` accepts detached senders that complete only with
-  `set_value()` and/or `set_stopped()`. `spawn_future(sender, token, env)`
-  eagerly starts the input sender and returns a move-only sender that consumes
-  the stored result. Destroying that returned sender before the child completes
-  requests stop for the child. Join receivers must expose `get_scheduler`
-  through their environment.
+- `associate(sender, token)` is a pipeable sender adaptor that adds a possible
+  `set_stopped()` completion when association is rejected.
+  `spawn(sender, token, env)` and `spawn_future(sender, token, env)` are
+  independent scope consumers: each connects its wrapped child before trying
+  to associate it, but starts that child only after association succeeds.
+  `spawn` accepts detached senders that complete only with `set_value()` and/or
+  `set_stopped()`.
+  `spawn_future` returns a move-only sender that consumes the stored result.
+  Destroying that returned sender before the child completes requests stop for
+  the child. Join receivers must expose `get_scheduler` through their
+  environment.
 - If exceptions are disabled, `then` cannot translate thrown exceptions to
   `std::exception_ptr`; the same limitation applies to other adaptors that
   report callable/connect failures as `std::exception_ptr`.

@@ -244,24 +244,34 @@ class let_operation {
  private:
   template <class Signature, class... Args>
   void start_child(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      using child_operation =
-          typename let_child_operation_type<Tag, Fn, child_receiver_type,
-                                            Signature>::type;
+    using child_sender = std::invoke_result_t<Fn&, Args...>;
+    using child_operation =
+        typename let_child_operation_type<Tag, Fn, child_receiver_type,
+                                          Signature>::type;
 
+    if constexpr (std::is_nothrow_invocable_v<Fn&, Args...> &&
+                  noexcept(
+                      bexec::connect(std::declval<child_sender>(),
+                                     std::declval<child_receiver_type>()))) {
       child_operations_.template emplace_from<child_operation>(
           [this, &args...]() -> child_operation {
             return bexec::connect(std::invoke(fn_, std::forward<Args>(args)...),
                                   child_receiver_type{*this});
           });
       child_operations_.start();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      bexec::set_error(std::move(receiver_), std::current_exception());
+    } else {
+      try {
+        child_operations_.template emplace_from<child_operation>(
+            [this, &args...]() -> child_operation {
+              return bexec::connect(
+                  std::invoke(fn_, std::forward<Args>(args)...),
+                  child_receiver_type{*this});
+            });
+        child_operations_.start();
+      } catch (...) {
+        bexec::set_error(std::move(receiver_), std::current_exception());
+      }
     }
-#endif
   }
 
   Fn fn_;

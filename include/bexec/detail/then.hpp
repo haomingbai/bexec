@@ -10,7 +10,7 @@
  * @details
  * Wraps a downstream receiver, invokes the user callable on the selected
  * completion kind, forwards non-selected completions unchanged, and reports
- * thrown exceptions when exceptions are enabled.
+ * exceptions thrown by the callable to the receiver as std::exception_ptr.
  */
 
 #pragma once
@@ -68,22 +68,27 @@ class completion_adaptor_receiver {
 
  private:
   template <class... Args>
-  void complete_selected(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      if constexpr (std::is_void_v<std::invoke_result_t<Fn&, Args...>>) {
-        std::invoke(fn_, std::forward<Args>(args)...);
-        bexec::set_value(std::move(receiver_));
-      } else {
-        bexec::set_value(std::move(receiver_),
-                         std::invoke(fn_, std::forward<Args>(args)...));
-      }
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      bexec::set_error(std::move(receiver_), std::current_exception());
+  void invoke_and_set_value(Args&&... args) {
+    if constexpr (std::is_void_v<std::invoke_result_t<Fn&, Args...>>) {
+      std::invoke(fn_, std::forward<Args>(args)...);
+      bexec::set_value(std::move(receiver_));
+    } else {
+      bexec::set_value(std::move(receiver_),
+                       std::invoke(fn_, std::forward<Args>(args)...));
     }
-#endif
+  }
+
+  template <class... Args>
+  void complete_selected(Args&&... args) noexcept {
+    if constexpr (std::is_nothrow_invocable_v<Fn&, Args...>) {
+      invoke_and_set_value(std::forward<Args>(args)...);
+    } else {
+      try {
+        invoke_and_set_value(std::forward<Args>(args)...);
+      } catch (...) {
+        bexec::set_error(std::move(receiver_), std::current_exception());
+      }
+    }
   }
 
   Receiver receiver_;

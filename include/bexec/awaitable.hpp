@@ -216,13 +216,9 @@ class sender_awaitable {
   }
 
   decltype(auto) await_resume() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
     if (error_) {
       std::rethrow_exception(error_);
     }
-#else
-    assert(!error_);
-#endif
 
     if constexpr (std::is_void_v<value_type>) {
       value_.take();
@@ -246,39 +242,29 @@ class sender_awaitable {
     requires(!std::is_void_v<value_type> &&
              std::constructible_from<value_type, Value>)
   void complete_value(Value&& value) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_constructible_v<value_type, Value>) {
       value_.emplace(std::forward<Value>(value));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      error_ = std::current_exception();
+    } else {
+      try {
+        value_.emplace(std::forward<Value>(value));
+      } catch (...) {
+        error_ = std::current_exception();
+      }
     }
-#endif
     resume();
   }
 
   template <class Error>
   void complete_error(Error&& error) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-      if constexpr (std::same_as<std::decay_t<Error>, std::exception_ptr>) {
-        error_ = std::forward<Error>(error);
-      } else {
-        error_ = std::make_exception_ptr(std::forward<Error>(error));
-      }
-    } catch (...) {
-      error_ = std::current_exception();
-    }
-#else
     if constexpr (std::same_as<std::decay_t<Error>, std::exception_ptr>) {
       error_ = std::forward<Error>(error);
     } else {
-      (void)error;
-      assert(false);
-      BEXEC_DETAIL_UNREACHABLE();
+      try {
+        error_ = std::make_exception_ptr(std::forward<Error>(error));
+      } catch (...) {
+        error_ = std::current_exception();
+      }
     }
-#endif
     resume();
   }
 

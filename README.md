@@ -226,8 +226,14 @@ loop.run();
   Destroying that returned sender before the child completes requests stop for
   the child. Join receivers must expose `get_scheduler` through their
   environment.
-- If exceptions are disabled, `then` cannot translate thrown exceptions to
-  `std::exception_ptr`; the same limitation applies to other adaptors that
-  report callable/connect failures as `std::exception_ptr`.
+- Exception handling is decided entirely at compile time from the `noexcept`
+  properties of template arguments (`if constexpr`). Receiver set_x members are
+  `noexcept` contracts; value-construction and user-callable paths are wrapped
+  in `try`/`catch` only when the involved types are not statically `noexcept`,
+  translating a thrown exception into `set_error(std::exception_ptr)`.
+  Adaptors that wrap a child `connect`/`start` capture exceptions the same way.
+  The library does not track whether exceptions are enabled at compile time;
+  building with exceptions disabled is the user's responsibility and is not
+  guaranteed to compile.
 
 See `docs/usage/`, `docs/design.md`, and `docs/maintenance.md` for details.

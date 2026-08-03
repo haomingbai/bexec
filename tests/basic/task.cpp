@@ -15,6 +15,8 @@
 #include <bexec/just.hpp>
 #include <bexec/task.hpp>
 #include <concepts>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 #include <utility>
 
@@ -80,6 +82,38 @@ TEST(basic, task_sender_awaitable_shapes) {
   task.start();
   EXPECT_TRUE(task.done());
   EXPECT_EQ(task.result(), 43);
+}
+
+TEST(basic, task_exception_propagates) {
+  auto t = []() -> bexec::task<int> {
+    throw std::runtime_error("task boom");
+    co_return 1;
+  }();
+  t.start();
+  bool caught = false;
+  try {
+    (void)t.result();
+  } catch (const std::runtime_error& e) {
+    caught = std::string(e.what()) == "task boom";
+  }
+  EXPECT_TRUE(caught);
+}
+
+TEST(basic, task_coawait_error_rethrows) {
+  // sender_awaitable::await_resume rethrows an error completion.
+  auto t = []() -> bexec::task<int> {
+    co_await bexec::just_error(
+        std::make_exception_ptr(std::runtime_error("aw boom")));
+    co_return 0;
+  }();
+  t.start();
+  bool caught = false;
+  try {
+    (void)t.result();
+  } catch (const std::runtime_error& e) {
+    caught = std::string(e.what()) == "aw boom";
+  }
+  EXPECT_TRUE(caught);
 }
 
 }  // namespace bexec_tests

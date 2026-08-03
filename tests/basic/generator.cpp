@@ -11,6 +11,8 @@
 #include <bexec/generator.hpp>
 #include <concepts>
 #include <ranges>
+#include <stdexcept>
+#include <string>
 #include <type_traits>
 
 #include "test_support.hpp"
@@ -48,6 +50,22 @@ TEST(basic, generator_models_single_pass_range) {
     ++count;
   }
   EXPECT_EQ(count, 0);
+}
+
+TEST(basic, generator_exception_propagates) {
+  auto gen = []() -> bexec::generator<int> {
+    co_yield 1;
+    throw std::runtime_error("gen boom");
+  }();
+  auto it = gen.begin();
+  EXPECT_EQ(*it, 1);
+  bool caught = false;
+  try {
+    ++it;
+  } catch (const std::runtime_error& e) {
+    caught = std::string(e.what()) == "gen boom";
+  }
+  EXPECT_TRUE(caught);
 }
 
 }  // namespace bexec_tests

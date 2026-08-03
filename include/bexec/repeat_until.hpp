@@ -45,7 +45,9 @@ class repeat_until_sender {
       detail::unique_type_list_t<detail::concat_type_lists_t<
           value_signatures, type_list<set_stopped_t()>,
           detail::set_error_signatures_from_type_list_t<
-              detail::sender_errors_with_exception_t<sender_type>>>>>;
+              detail::unique_type_list_t<detail::concat_type_lists_t<
+                  detail::sender_error_types_t<sender_type>,
+                  type_list<std::exception_ptr>>>>>>>;
 
   repeat_until_sender(Factory factory, Predicate predicate)
       : factory_(std::move(factory)), predicate_(std::move(predicate)) {}

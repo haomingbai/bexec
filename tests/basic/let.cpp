@@ -230,4 +230,27 @@ TEST(basic, let_replacement_paths) {
   }
 }
 
+TEST(basic, let_value_fn_noexcept) {
+  auto state = std::make_shared<shared_state>();
+  auto sender = bexec::just(1) | bexec::let_value([](int v) noexcept {
+                  return bexec::just(v + 1);
+                });
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 2);
+}
+
+TEST(basic, let_value_fn_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender =
+      bexec::just(1) | bexec::let_value([](int) -> bexec::just_sender<int> {
+        throw std::runtime_error("let fn");
+      });
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
+}
+
 }  // namespace bexec_tests

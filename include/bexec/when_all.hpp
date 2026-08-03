@@ -78,8 +78,9 @@ class when_all_sender {
     static constexpr bool sends_value =
         (detail::sender_has_single_value_completion_v<Senders, child_env> &&
          ...);
-    using state_type = detail::when_all_state<Receiver, error_variant,
-                                              values_tuple, sends_value>;
+    using state_type =
+        detail::when_all_state<Receiver, error_variant, values_tuple,
+                               sends_value, sender_tuple>;
     using indices = std::index_sequence_for<Senders...>;
     using operation_tuple =
         typename detail::when_all_operation_tuple<Receiver, error_variant,
@@ -110,25 +111,31 @@ class when_all_sender {
     template <std::size_t Index>
     void start_one() noexcept {
       using child_receiver = detail::when_all_child_receiver<Index, state_type>;
+      using child_sender = std::tuple_element_t<Index, sender_tuple>;
       using child_operation =
           detail::when_all_child_operation_t<Receiver, error_variant,
                                              values_tuple, sends_value,
                                              sender_tuple, Index>;
       auto& slot = std::get<Index>(operations_);
 
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(bexec::connect(std::declval<child_sender>(),
+                                            std::declval<child_receiver>()))) {
         slot.emplace_from([this]() -> child_operation {
           return bexec::connect(std::move(std::get<Index>(senders_)),
                                 child_receiver{state_});
         });
         bexec::start(*slot);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        state_.child_error(std::current_exception());
+      } else {
+        try {
+          slot.emplace_from([this]() -> child_operation {
+            return bexec::connect(std::move(std::get<Index>(senders_)),
+                                  child_receiver{state_});
+          });
+          bexec::start(*slot);
+        } catch (...) {
+          state_.child_error(std::current_exception());
+        }
       }
-#endif
     }
 
     sender_tuple senders_;

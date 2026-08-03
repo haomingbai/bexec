@@ -101,13 +101,7 @@ class task_awaiter {
 
 template <class Promise>
 void store_task_exception(Promise& promise) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
   promise.error_ = std::current_exception();
-#else
-  (void)promise;
-  assert(false);
-  BEXEC_DETAIL_UNREACHABLE();
-#endif
 }
 
 }  // namespace detail
@@ -152,13 +146,9 @@ class task {
 
     T consume_result() {
       rethrow_error();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       if (stopped_) {
         throw task_stopped{};
       }
-#else
-      assert(!stopped_);
-#endif
       assert(value_.has_value());
       return std::move(*value_);
     }
@@ -172,13 +162,9 @@ class task {
 
    private:
     void rethrow_error() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       if (error_) {
         std::rethrow_exception(error_);
       }
-#else
-      assert(!error_);
-#endif
     }
 
     friend void detail::store_task_exception<promise_type>(
@@ -282,13 +268,9 @@ class task<void> {
 
     void consume_result() {
       rethrow_error();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       if (stopped_) {
         throw task_stopped{};
       }
-#else
-      assert(!stopped_);
-#endif
     }
 
     void consume_await_result() {
@@ -298,13 +280,9 @@ class task<void> {
 
    private:
     void rethrow_error() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       if (error_) {
         std::rethrow_exception(error_);
       }
-#else
-      assert(!error_);
-#endif
     }
 
     friend void detail::store_task_exception<promise_type>(

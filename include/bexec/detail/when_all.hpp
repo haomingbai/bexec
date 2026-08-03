@@ -114,7 +114,7 @@ using when_all_completion_signatures_for_env_t =
     typename when_all_completion_signatures_for_env<Env, Senders...>::type;
 
 template <class Receiver, class ErrorVariant, class ValuesTuple,
-          bool SendsValue>
+          bool SendsValue, class SenderTuple>
 struct when_all_state {
   struct on_stop_request {
     inplace_stop_source* source;
@@ -131,20 +131,23 @@ struct when_all_state {
       : receiver(std::move(recv)), remaining(count) {}
 
   bool register_stop_callback() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      auto token = bexec::get_stop_token(bexec::get_env(receiver));
-      if constexpr (!std::is_same_v<stop_token_type, bexec::never_stop_token>) {
-        on_stop.emplace(std::move(token), on_stop_request{&stop_source});
-      }
+    auto token = bexec::get_stop_token(bexec::get_env(receiver));
+    if constexpr (std::is_same_v<stop_token_type, bexec::never_stop_token>) {
       return true;
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      start_error(std::current_exception());
-      return false;
+    } else if constexpr (std::is_nothrow_constructible_v<on_stop_callback_type,
+                                                         stop_token_type,
+                                                         on_stop_request>) {
+      on_stop.emplace(std::move(token), on_stop_request{&stop_source});
+      return true;
+    } else {
+      try {
+        on_stop.emplace(std::move(token), on_stop_request{&stop_source});
+        return true;
+      } catch (...) {
+        start_error(std::current_exception());
+        return false;
+      }
     }
-#endif
   }
 
   void start_error(std::exception_ptr error_value) noexcept {
@@ -164,20 +167,25 @@ struct when_all_state {
 
   template <std::size_t Index, class... Args>
   void child_value(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    auto& slot = std::get<Index>(values);
+    using value_type = std::remove_reference_t<decltype(slot)>::value_type;
+    if constexpr (std::is_nothrow_constructible_v<value_type, Args...>) {
       {
         std::lock_guard lock(mutex);
-        auto& slot = std::get<Index>(values);
         slot.emplace(std::forward<Args>(args)...);
       }
-      finish_one();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      child_error(std::current_exception());
+    } else {
+      try {
+        {
+          std::lock_guard lock(mutex);
+          slot.emplace(std::forward<Args>(args)...);
+        }
+      } catch (...) {
+        child_error(std::current_exception());
+        return;
+      }
     }
-#endif
+    finish_one();
   }
 
   template <class Error>
@@ -187,16 +195,17 @@ struct when_all_state {
       std::lock_guard lock(mutex);
       if (terminal == terminal_kind::none) {
         terminal = terminal_kind::error;
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-        try {
-#endif
+        if constexpr (std::is_nothrow_constructible_v<std::decay_t<Error>,
+                                                      Error>) {
           store_error(std::forward<Error>(error_value));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-        } catch (...) {
-          error.emplace(std::in_place_type<std::exception_ptr>,
-                        std::current_exception());
+        } else {
+          try {
+            store_error(std::forward<Error>(error_value));
+          } catch (...) {
+            error.emplace(std::in_place_type<std::exception_ptr>,
+                          std::current_exception());
+          }
         }
-#endif
         request_stop = true;
       }
     }
@@ -282,15 +291,16 @@ struct when_all_state {
   static void deliver_error(Receiver recv, ErrorVariant error_value) noexcept {
     std::visit(
         [&recv](auto& error) noexcept {
-          bexec::set_error(std::move(recv), std::move(error));
+          using error_type = remove_cvref_t<decltype(error)>;
+          if constexpr (!std::same_as<error_type, std::monostate>) {
+            bexec::set_error(std::move(recv), std::move(error));
+          }
         },
         error_value);
   }
 
   static void deliver_success(Receiver recv, ValuesTuple values) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_move_constructible_v<ValuesTuple>) {
       auto joined = tuple_cat_values(
           std::move(values),
           std::make_index_sequence<std::tuple_size_v<ValuesTuple>>{});
@@ -300,11 +310,21 @@ struct when_all_state {
                              std::forward<decltype(args)>(args)...);
           },
           std::move(joined));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      bexec::set_error(std::move(recv), std::current_exception());
+    } else {
+      try {
+        auto joined = tuple_cat_values(
+            std::move(values),
+            std::make_index_sequence<std::tuple_size_v<ValuesTuple>>{});
+        std::apply(
+            [&recv](auto&&... args) noexcept {
+              bexec::set_value(std::move(recv),
+                               std::forward<decltype(args)>(args)...);
+            },
+            std::move(joined));
+      } catch (...) {
+        bexec::set_error(std::move(recv), std::current_exception());
+      }
     }
-#endif
   }
 
   template <std::size_t... Indices>
@@ -357,8 +377,8 @@ template <class Receiver, class ErrorVariant, class ValuesTuple,
 using when_all_child_operation_t = decltype(bexec::connect(
     std::declval<std::tuple_element_t<Index, SenderTuple>>(),
     std::declval<when_all_child_receiver<
-        Index,
-        when_all_state<Receiver, ErrorVariant, ValuesTuple, SendsValue>>>()));
+        Index, when_all_state<Receiver, ErrorVariant, ValuesTuple, SendsValue,
+                              SenderTuple>>>()));
 
 template <class Receiver, class ErrorVariant, class ValuesTuple,
           bool SendsValue, class SenderTuple, class Indices>

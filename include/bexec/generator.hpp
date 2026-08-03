@@ -92,24 +92,15 @@ class generator {
 
     void return_void() const noexcept {}
 
-    void unhandled_exception() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      error_ = std::current_exception();
-#else
-      assert(false);
-      BEXEC_DETAIL_UNREACHABLE();
-#endif
-    }
+    void unhandled_exception() noexcept { error_ = std::current_exception(); }
 
     template <class Value>
     void await_transform(Value&&) = delete;
 
     void rethrow_if_exception() {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
       if (error_) {
         std::rethrow_exception(error_);
       }
-#endif
     }
 
    private:

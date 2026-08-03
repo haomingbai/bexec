@@ -108,16 +108,16 @@ class sync_wait_receiver {
 
   template <class... Args>
   void set_value(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_constructible_v<ResultTuple, Args...>) {
       state_->value.emplace(std::forward<Args>(args)...);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      state_->error.emplace(std::in_place_type<std::exception_ptr>,
-                            std::current_exception());
+    } else {
+      try {
+        state_->value.emplace(std::forward<Args>(args)...);
+      } catch (...) {
+        state_->error.emplace(std::in_place_type<std::exception_ptr>,
+                              std::current_exception());
+      }
     }
-#endif
     state_->loop->finish();
   }
 
@@ -140,7 +140,6 @@ class sync_wait_receiver {
 
 template <class ErrorVariant>
 [[noreturn]] void throw_error(ErrorVariant error) {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
   std::visit(
       [](auto& value) -> void {
         using error_type = std::decay_t<decltype(value)>;
@@ -151,9 +150,6 @@ template <class ErrorVariant>
         }
       },
       error);
-#else
-  (void)error;
-#endif
   assert(false);
   BEXEC_DETAIL_UNREACHABLE();
 }

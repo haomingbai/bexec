@@ -134,6 +134,21 @@ struct completion_adaptor_signature<Tag, Fn, set_stopped_t()> {
   using type = type_list<set_stopped_t()>;
 };
 
+template <class Tag, class Fn, class Signature>
+struct completion_adaptor_invoke_nothrow : std::true_type {};
+
+template <class Fn, class... Args>
+struct completion_adaptor_invoke_nothrow<set_value_t, Fn, set_value_t(Args...)>
+    : std::is_nothrow_invocable<Fn&, Args...> {};
+
+template <class Fn, class Error>
+struct completion_adaptor_invoke_nothrow<set_error_t, Fn, set_error_t(Error)>
+    : std::is_nothrow_invocable<Fn&, Error> {};
+
+template <class Fn>
+struct completion_adaptor_invoke_nothrow<set_stopped_t, Fn, set_stopped_t()>
+    : std::is_nothrow_invocable<Fn&> {};
+
 template <class Tag, class Fn, class Completions>
 struct completion_adaptor_completion_signatures;
 
@@ -142,8 +157,11 @@ struct completion_adaptor_completion_signatures<
     Tag, Fn, completion_signatures<Signatures...>> {
   using transformed = concat_type_lists_t<
       typename completion_adaptor_signature<Tag, Fn, Signatures>::type...>;
+  static constexpr bool all_nothrow =
+      (completion_adaptor_invoke_nothrow<Tag, Fn, Signatures>::value && ...);
   using with_exception = unique_type_list_t<concat_type_lists_t<
-      transformed, type_list<set_error_t(std::exception_ptr)>>>;
+      transformed,
+      maybe_type_list_t<!all_nothrow, set_error_t(std::exception_ptr)>>>;
   using type = completion_signatures_from_type_list_t<with_exception>;
 };
 
@@ -271,18 +289,6 @@ struct completion_result_tuple<Tag(Args...)> {
 template <class Signature>
 using completion_result_tuple_t =
     typename completion_result_tuple<Signature>::type;
-
-template <class Signature>
-struct completion_signature_nothrow_decay;
-
-template <class Tag, class... Args>
-struct completion_signature_nothrow_decay<Tag(Args...)>
-    : std::bool_constant<(
-          std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...)> {};
-
-template <class Signature>
-inline constexpr bool completion_signature_nothrow_decay_v =
-    completion_signature_nothrow_decay<Signature>::value;
 
 template <class Signature>
 struct value_tuple_for_signature {

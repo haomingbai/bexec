@@ -469,33 +469,25 @@ void spawn(Sender&& sender, Token token, Env&& env) {
   allocator_type allocator{byte_alloc};
   operation_type* operation = allocator_traits::allocate(allocator, 1);
 
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-  try {
-#endif
+  if constexpr (noexcept(allocator_traits::construct(
+                    allocator, operation, std::move(wrapped_sender),
+                    std::move(token), std::move(env_object), allocator))) {
     allocator_traits::construct(allocator, operation, std::move(wrapped_sender),
                                 std::move(token), std::move(env_object),
                                 allocator);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-  } catch (...) {
-    allocator_traits::deallocate(allocator, operation, 1);
-    throw;
+  } else {
+    try {
+      allocator_traits::construct(allocator, operation,
+                                  std::move(wrapped_sender), std::move(token),
+                                  std::move(env_object), allocator);
+    } catch (...) {
+      allocator_traits::deallocate(allocator, operation, 1);
+      throw;
+    }
   }
-#endif
 
   bexec::start(*operation);
 }
-
-template <class Completions>
-struct spawn_future_all_nothrow_decay;
-
-template <class... Signatures>
-struct spawn_future_all_nothrow_decay<completion_signatures<Signatures...>>
-    : std::bool_constant<(completion_signature_nothrow_decay_v<Signatures> &&
-                          ...)> {};
-
-template <class Completions>
-inline constexpr bool spawn_future_all_nothrow_decay_v =
-    spawn_future_all_nothrow_decay<Completions>::value;
 
 template <class Completions>
 struct spawn_future_result_variant;
@@ -503,12 +495,10 @@ struct spawn_future_result_variant;
 template <class... Signatures>
 struct spawn_future_result_variant<completion_signatures<Signatures...>> {
   using exception_result = std::tuple<set_error_t, std::exception_ptr>;
-  using result_list = unique_type_list_t<concat_type_lists_t<
-      type_list<std::monostate, std::tuple<set_stopped_t>>,
-      maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
-                            completion_signatures<Signatures...>>,
-                        exception_result>,
-      type_list<completion_result_tuple_t<Signatures>...>>>;
+  using result_list = unique_type_list_t<
+      concat_type_lists_t<type_list<std::monostate, std::tuple<set_stopped_t>>,
+                          type_list<exception_result>,
+                          type_list<completion_result_tuple_t<Signatures>...>>>;
   using type = variant_from_type_list_t<result_list>;
 };
 
@@ -524,10 +514,7 @@ struct spawn_future_completion_signatures<
     completion_signatures<Signatures...>> {
   using exception_signature = set_error_t(std::exception_ptr);
   using signature_list = unique_type_list_t<concat_type_lists_t<
-      type_list<set_stopped_t()>,
-      maybe_type_list_t<!spawn_future_all_nothrow_decay_v<
-                            completion_signatures<Signatures...>>,
-                        exception_signature>,
+      type_list<set_stopped_t()>, type_list<exception_signature>,
       type_list<decayed_completion_signature_t<Signatures>...>>>;
   using type = completion_signatures_from_type_list_t<signature_list>;
 };
@@ -566,7 +553,6 @@ class spawn_future_receiver {
     constexpr bool nothrow =
         (std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...);
 
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
     if constexpr (!nothrow) {
       try {
         state_->result().template emplace<result_type>(
@@ -576,15 +562,10 @@ class spawn_future_receiver {
         state_->result().template emplace<error_result>(
             set_error_t{}, std::current_exception());
       }
-    } else
-#endif
-    {
+    } else {
       state_->result().template emplace<result_type>(
           Tag{}, std::forward<Args>(args)...);
     }
-#if !BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    (void)nothrow;
-#endif
 
     state_->complete();
   }
@@ -961,18 +942,23 @@ auto spawn_future(Sender&& sender, Token token, Env&& env) {
   allocator_type allocator{byte_alloc};
   state_type* state = allocator_traits::allocate(allocator, 1);
 
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-  try {
-#endif
+  if constexpr (noexcept(allocator_traits::construct(
+                    allocator, state, std::move(byte_alloc),
+                    std::move(wrapped_sender), std::move(token),
+                    std::move(env_object)))) {
     allocator_traits::construct(allocator, state, std::move(byte_alloc),
                                 std::move(wrapped_sender), std::move(token),
                                 std::move(env_object));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-  } catch (...) {
-    allocator_traits::deallocate(allocator, state, 1);
-    throw;
+  } else {
+    try {
+      allocator_traits::construct(allocator, state, std::move(byte_alloc),
+                                  std::move(wrapped_sender), std::move(token),
+                                  std::move(env_object));
+    } catch (...) {
+      allocator_traits::deallocate(allocator, state, 1);
+      throw;
+    }
   }
-#endif
 
   return spawn_future_sender<state_type>{
       spawn_future_state_handle<state_type>{state}};

@@ -266,7 +266,8 @@ class run_loop_schedule_sender {
   template <class Receiver>
   class operation : public run_loop_operation_base {
    public:
-    operation(run_loop& loop, Receiver receiver)
+    operation(run_loop& loop, Receiver receiver) noexcept(
+        std::is_nothrow_move_constructible_v<Receiver>)
         : loop_(&loop), receiver_(std::move(receiver)) {}
 
     operation(const operation&) = delete;
@@ -292,7 +293,8 @@ class run_loop_schedule_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) const {
+  auto connect(Receiver receiver) const
+      noexcept(std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{*loop_, std::move(receiver)};
   }
 

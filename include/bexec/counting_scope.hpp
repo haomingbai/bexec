@@ -403,19 +403,25 @@ class simple_counting_scope::join_sender {
 
    private:
     void complete_deferred() noexcept override {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(
+                        bexec::connect(std::declval<schedule_sender_type>(),
+                                       std::declval<final_receiver_type>()))) {
         final_operation_.emplace_from([this]() -> final_operation_type {
           return bexec::connect(bexec::schedule(scheduler_),
                                 final_receiver_type{*this});
         });
         bexec::start(*final_operation_);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          final_operation_.emplace_from([this]() -> final_operation_type {
+            return bexec::connect(bexec::schedule(scheduler_),
+                                  final_receiver_type{*this});
+          });
+          bexec::start(*final_operation_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+        }
       }
-#endif
     }
 
     simple_counting_scope* scope_;

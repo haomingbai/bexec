@@ -40,7 +40,9 @@ class just_sender {
   template <class Receiver>
   class operation {
    public:
-    operation(std::tuple<Values...> values, Receiver receiver)
+    operation(std::tuple<Values...> values, Receiver receiver) noexcept(
+        std::is_nothrow_move_constructible_v<std::tuple<Values...>> &&
+        std::is_nothrow_move_constructible_v<Receiver>)
         : values_(std::move(values)), receiver_(std::move(receiver)) {}
 
     /** @brief Completes synchronously with set_value(values...). */
@@ -58,13 +60,17 @@ class just_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) && {
+  auto connect(Receiver receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<std::tuple<Values...>> &&
+      std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{std::move(values_), std::move(receiver)};
   }
 
   template <class Receiver>
     requires((std::copy_constructible<Values> && ...))
-  auto connect(Receiver receiver) const& {
+  auto connect(Receiver receiver) const& noexcept(
+      std::is_nothrow_copy_constructible_v<std::tuple<Values...>> &&
+      std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{values_, std::move(receiver)};
   }
 

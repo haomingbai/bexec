@@ -243,6 +243,11 @@ struct variant_from_type_list<type_list<Ts...>> {
   using type = std::variant<Ts...>;
 };
 
+template <>
+struct variant_from_type_list<type_list<>> {
+  using type = std::variant<std::monostate>;
+};
+
 template <class List>
 using variant_from_type_list_t = typename variant_from_type_list<List>::type;
 

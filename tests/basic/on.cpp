@@ -31,4 +31,13 @@ TEST(basic, starts_on_defers_source_start) {
   EXPECT_EQ(state->int_value, 42);
 }
 
+TEST(basic, starts_on_schedule_connect_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender = bexec::starts_on(throwing_schedule_scheduler{}, bexec::just(1));
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
+}
+
 }  // namespace bexec_tests

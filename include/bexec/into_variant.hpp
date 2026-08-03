@@ -43,18 +43,22 @@ class into_variant_receiver {
 
   template <class... Args>
   void set_value(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
-      using tuple_type = decayed_tuple<Args...>;
+    using tuple_type = decayed_tuple<Args...>;
+    if constexpr (std::is_nothrow_constructible_v<
+                      ValueVariant, std::in_place_type_t<tuple_type>,
+                      Args...>) {
       bexec::set_value(std::move(receiver_),
                        ValueVariant{std::in_place_type<tuple_type>,
                                     std::forward<Args>(args)...});
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      bexec::set_error(std::move(receiver_), std::current_exception());
+    } else {
+      try {
+        bexec::set_value(std::move(receiver_),
+                         ValueVariant{std::in_place_type<tuple_type>,
+                                      std::forward<Args>(args)...});
+      } catch (...) {
+        bexec::set_error(std::move(receiver_), std::current_exception());
+      }
     }
-#endif
   }
 
   template <class Error>

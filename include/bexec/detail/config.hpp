@@ -8,21 +8,17 @@
  * SPDX-License-Identifier: MIT
  *
  * @details
- * Detects whether C++ exceptions are enabled and exposes the
- * BEXEC_DETAIL_EXCEPTIONS_ENABLED switch used by exception-sensitive sender
- * implementations.
+ * Provides the internal unreachable helper. Exception handling in sender
+ * implementations is selected purely by noexcept analysis of the invoked
+ * callable (see bexec/detail/type_traits.hpp); the library does not track
+ * whether exceptions are enabled at compile time. Building with exceptions
+ * disabled is the user's responsibility and is not guaranteed to compile.
  */
 
 #pragma once
 
 #ifndef BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_
 #define BEXEC_INCLUDE_BEXEC_DETAIL_CONFIG_HPP_
-
-#if defined(__cpp_exceptions) || defined(__EXCEPTIONS) || defined(_CPPUNWIND)
-#define BEXEC_DETAIL_EXCEPTIONS_ENABLED 1
-#else
-#define BEXEC_DETAIL_EXCEPTIONS_ENABLED 0
-#endif
 
 #if defined(__clang__) || defined(__GNUC__)
 #define BEXEC_DETAIL_UNREACHABLE() __builtin_unreachable()

@@ -20,6 +20,7 @@
 #include <bexec/sender.hpp>
 #include <bexec/then.hpp>
 #include <memory>
+#include <stdexcept>
 #include <string>
 #include <utility>
 
@@ -128,6 +129,39 @@ TEST(basic, repeat_until_completion_paths) {
 
     EXPECT_EQ(state->signal, signal_kind::stopped);
   }
+}
+
+// Covers the predicate-throwing branch of process_one(value_completion<Tuple>&)
+// in detail/repeat_until.hpp: when the predicate is not statically nothrow
+// invocable, its invocation is wrapped in try/catch and any exception is
+// forwarded downstream as set_error(std::exception_ptr).
+TEST(basic, repeat_until_predicate_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender =
+      bexec::repeat_until([] { return bexec::just(1); },
+                          []() -> bool { throw std::runtime_error("pred"); });
+
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
+}
+
+// Covers the factory-throwing branch of drain(): the try/catch around the
+// factory invocation and child connect in detail/repeat_until.hpp:238-260.
+// The exception is forwarded downstream as set_error(std::exception_ptr).
+TEST(basic, repeat_until_factory_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender = bexec::repeat_until(
+      []() -> bexec::just_sender<int> { throw std::runtime_error("factory"); },
+      []() { return true; });
+
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
 }
 
 }  // namespace bexec_tests

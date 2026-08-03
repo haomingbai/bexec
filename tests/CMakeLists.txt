@@ -181,6 +181,24 @@ endforeach()
 add_library(bexec_header_self_contained OBJECT ${BEXEC_HEADER_CHECK_SOURCES})
 target_link_libraries(bexec_header_self_contained PRIVATE bexec::bexec)
 
+# Compile-and-run validation with exceptions disabled. Every noexcept branch
+# exercised by noexceptions.cpp must contain no try/catch/throw; a residual
+# exception-handling construct would fail the -fno-exceptions build.
+add_executable(bexec_test_noexceptions noexceptions.cpp)
+target_link_libraries(bexec_test_noexceptions PRIVATE bexec::bexec)
+if(MSVC)
+    target_compile_options(bexec_test_noexceptions PRIVATE /EHs-c-)
+else()
+    target_compile_options(bexec_test_noexceptions PRIVATE -fno-exceptions)
+endif()
+add_test(NAME "bexec.noexceptions" COMMAND bexec_test_noexceptions)
+set_tests_properties(
+    "bexec.noexceptions"
+    PROPERTIES
+        LABELS "noexceptions"
+        TIMEOUT 30
+)
+
 add_custom_target(
     bexec_tests
     DEPENDS ${BEXEC_TEST_TARGETS} bexec_header_self_contained

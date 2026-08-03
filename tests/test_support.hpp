@@ -19,10 +19,13 @@
 
 #include <gtest/gtest.h>
 
+#include <bexec/completion_signatures.hpp>
+#include <bexec/receiver.hpp>
 #include <concepts>
 #include <exception>
 #include <memory>
 #include <optional>
+#include <stdexcept>
 #include <string>
 #include <type_traits>
 #include <utility>
@@ -53,6 +56,11 @@ struct any_receiver {
   void set_value(std::unique_ptr<int> value) noexcept {
     state->signal = signal_kind::value;
     state->int_value = *value;
+  }
+
+  template <class... Args>
+  void set_value(Args&&...) noexcept {
+    state->signal = signal_kind::value;
   }
 
   template <class Error>
@@ -97,6 +105,97 @@ struct variant_receiver {
   }
 
   void set_stopped() noexcept { state->signal = signal_kind::stopped; }
+};
+
+/**
+ * @brief Value whose move/copy construction throws.
+ *
+ * Default construction is fine; every move or copy throws a runtime_error.
+ * Used to exercise the "value construction may throw" branch of set_x
+ * implementations (the else branch of
+ * `if constexpr (std::is_nothrow_constructible_v<...>)`).
+ */
+struct throwing_value {
+  throwing_value() = default;
+  throwing_value(const throwing_value&) {
+    throw std::runtime_error("throwing_value copy");
+  }
+  throwing_value(throwing_value&&) {
+    throw std::runtime_error("throwing_value move");
+  }
+};
+
+/**
+ * @brief Sender that completes with a throwing_value in start().
+ *
+ * The value is default-constructed at start time, so constructing the sender
+ * itself never throws; only the receiver-side storage move throws.
+ */
+struct throwing_value_sender {
+  struct op_base {};
+
+  template <class Receiver>
+  struct op {
+    Receiver receiver;
+
+    void start() noexcept {
+      bexec::set_value(std::move(receiver), throwing_value{});
+    }
+  };
+
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t(throwing_value)>;
+
+  template <class Receiver>
+  op<Receiver> connect(Receiver&& receiver) {
+    return op<Receiver>{std::forward<Receiver>(receiver)};
+  }
+};
+
+/**
+ * @brief Sender whose connect() always throws.
+ *
+ * Exercises the "connect may throw" branch of adaptors that wrap child
+ * connect/start (e.g. when_all/let/on operation states).
+ */
+struct throwing_connect_sender {
+  struct op {
+    void start() noexcept {}
+  };
+
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t()>;
+
+  template <class Receiver>
+  op connect(Receiver&&) {
+    throw std::runtime_error("throwing_connect_sender connect");
+  }
+};
+
+/**
+ * @brief Scheduler whose schedule() sender throws on connect.
+ *
+ * Exercises the schedule-connect throw branch of starts_on/on.
+ */
+struct throwing_schedule_scheduler {
+  struct op {
+    void start() noexcept {}
+  };
+
+  struct sender {
+    using completion_signatures =
+        bexec::completion_signatures<bexec::set_value_t()>;
+
+    template <class Receiver>
+    op connect(Receiver&&) {
+      throw std::runtime_error("throwing_schedule connect");
+    }
+  };
+
+  [[nodiscard]] sender schedule() const { return {}; }
+
+  friend bool operator==(throwing_schedule_scheduler,
+                         throwing_schedule_scheduler) noexcept = default;
 };
 
 }  // namespace bexec_tests

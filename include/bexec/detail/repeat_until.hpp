@@ -101,29 +101,30 @@ class repeat_until_operation {
 
   template <class... Args>
   void child_value(std::uint64_t child_epoch, Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_constructible_v<decayed_tuple<Args...>,
+                                                  Args...>) {
       store_value(std::forward<Args>(args)...);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      store_exception(std::current_exception());
+    } else {
+      try {
+        store_value(std::forward<Args>(args)...);
+      } catch (...) {
+        store_exception(std::current_exception());
+      }
     }
-#endif
     finish_child(child_epoch);
   }
 
   template <class Error>
   void child_error(std::uint64_t child_epoch, Error&& error) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_constructible_v<std::decay_t<Error>, Error>) {
       store_error(std::forward<Error>(error));
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      store_exception(std::current_exception());
+    } else {
+      try {
+        store_error(std::forward<Error>(error));
+      } catch (...) {
+        store_exception(std::current_exception());
+      }
     }
-#endif
     finish_child(child_epoch);
   }
 
@@ -180,20 +181,24 @@ class repeat_until_operation {
 
   template <class Tuple>
   bool process_one(value_completion<Tuple>& completion) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    try {
-#endif
+    if constexpr (std::is_nothrow_invocable_v<Predicate&>) {
       if (predicate_()) {
         complete_value(std::move(completion.values));
         return false;
       }
       return true;
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-    } catch (...) {
-      bexec::set_error(std::move(receiver_), std::current_exception());
-      return false;
+    } else {
+      try {
+        if (predicate_()) {
+          complete_value(std::move(completion.values));
+          return false;
+        }
+        return true;
+      } catch (...) {
+        bexec::set_error(std::move(receiver_), std::current_exception());
+        return false;
+      }
     }
-#endif
   }
 
   template <class Error>
@@ -230,33 +235,40 @@ class repeat_until_operation {
 
       const std::uint64_t child_epoch = epoch_.load(std::memory_order_acquire);
 
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (std::is_nothrow_invocable_v<Factory&> &&
+                    noexcept(
+                        bexec::connect(std::declval<sender_type>(),
+                                       std::declval<child_receiver_type>()))) {
         current_.emplace_from([this, child_epoch] {
           auto sender = factory_();
           return bexec::connect(std::move(sender),
                                 child_receiver_type{*this, child_epoch});
         });
-
         bexec::start(*current_);
-
-        std::uint64_t expected = child_epoch;
-        if (epoch_.compare_exchange_strong(expected, child_epoch + 1,
-                                           std::memory_order_acq_rel,
-                                           std::memory_order_acquire)) {
+      } else {
+        try {
+          current_.emplace_from([this, child_epoch] {
+            auto sender = factory_();
+            return bexec::connect(std::move(sender),
+                                  child_receiver_type{*this, child_epoch});
+          });
+          bexec::start(*current_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
           break;
         }
+      }
 
-        if (!process_stored_completion()) {
-          break;
-        }
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      std::uint64_t expected = child_epoch;
+      if (epoch_.compare_exchange_strong(expected, child_epoch + 1,
+                                         std::memory_order_acq_rel,
+                                         std::memory_order_acquire)) {
         break;
       }
-#endif
+
+      if (!process_stored_completion()) {
+        break;
+      }
     }
   }
 

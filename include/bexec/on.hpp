@@ -236,34 +236,46 @@ class starts_on_sender {
     void start() noexcept { start_schedule(); }
 
     void start_schedule() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(bexec::connect(
+                        std::declval<schedule_sender_type>(),
+                        std::declval<schedule_receiver_type>()))) {
         schedule_operation_.emplace_from([this]() -> schedule_operation_type {
           return bexec::connect(bexec::schedule(scheduler_),
                                 schedule_receiver_type{*this});
         });
         bexec::start(*schedule_operation_);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          schedule_operation_.emplace_from([this]() -> schedule_operation_type {
+            return bexec::connect(bexec::schedule(scheduler_),
+                                  schedule_receiver_type{*this});
+          });
+          bexec::start(*schedule_operation_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+        }
       }
-#endif
     }
 
     void start_child() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(
+                        bexec::connect(std::declval<Sender>(),
+                                       std::declval<child_receiver_type>()))) {
         child_operation_.emplace_from([this]() -> child_operation_type {
           return bexec::connect(std::move(sender_), child_receiver_type{*this});
         });
         bexec::start(*child_operation_);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          child_operation_.emplace_from([this]() -> child_operation_type {
+            return bexec::connect(std::move(sender_),
+                                  child_receiver_type{*this});
+          });
+          bexec::start(*child_operation_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+        }
       }
-#endif
     }
 
     template <class Error>
@@ -349,54 +361,67 @@ class on_sender {
     void start() noexcept { start_source(); }
 
     void start_source() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(
+                        bexec::connect(std::declval<source_sender_type>(),
+                                       std::declval<source_receiver_type>()))) {
         source_operation_.emplace_from([this]() -> source_operation_type {
           return bexec::connect(
               source_sender_type{target_scheduler_, std::move(sender_)},
               source_receiver_type{*this});
         });
         bexec::start(*source_operation_);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          source_operation_.emplace_from([this]() -> source_operation_type {
+            return bexec::connect(
+                source_sender_type{target_scheduler_, std::move(sender_)},
+                source_receiver_type{*this});
+          });
+          bexec::start(*source_operation_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+        }
       }
-#endif
     }
 
     template <class... Args>
     void store_value(Args&&... args) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
-        using tuple_type = detail::decayed_tuple<Args...>;
+      using tuple_type = detail::decayed_tuple<Args...>;
+      if constexpr (std::is_nothrow_constructible_v<tuple_type, Args...>) {
         stored_.emplace(
             std::in_place_type<detail::value_completion<tuple_type>>,
             tuple_type{std::forward<Args>(args)...});
-        start_final();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          stored_.emplace(
+              std::in_place_type<detail::value_completion<tuple_type>>,
+              tuple_type{std::forward<Args>(args)...});
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+          return;
+        }
       }
-#endif
+      start_final();
     }
 
     template <class Error>
     void store_error(Error&& error) noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
-        using error_type = std::decay_t<Error>;
+      using error_type = std::decay_t<Error>;
+      if constexpr (std::is_nothrow_constructible_v<error_type, Error>) {
         stored_.emplace(
             std::in_place_type<detail::error_completion<error_type>>,
             std::forward<Error>(error));
-        start_final();
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          stored_.emplace(
+              std::in_place_type<detail::error_completion<error_type>>,
+              std::forward<Error>(error));
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+          return;
+        }
       }
-#endif
+      start_final();
     }
 
     void store_stopped() noexcept {
@@ -405,19 +430,25 @@ class on_sender {
     }
 
     void start_final() noexcept {
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      try {
-#endif
+      if constexpr (noexcept(bexec::connect(
+                        std::declval<final_schedule_sender_type>(),
+                        std::declval<final_receiver_type>()))) {
         final_operation_.emplace_from([this]() -> final_operation_type {
           return bexec::connect(bexec::schedule(final_scheduler_),
                                 final_receiver_type{*this});
         });
         bexec::start(*final_operation_);
-#if BEXEC_DETAIL_EXCEPTIONS_ENABLED
-      } catch (...) {
-        bexec::set_error(std::move(receiver_), std::current_exception());
+      } else {
+        try {
+          final_operation_.emplace_from([this]() -> final_operation_type {
+            return bexec::connect(bexec::schedule(final_scheduler_),
+                                  final_receiver_type{*this});
+          });
+          bexec::start(*final_operation_);
+        } catch (...) {
+          bexec::set_error(std::move(receiver_), std::current_exception());
+        }
       }
-#endif
     }
 
     void deliver_stored() noexcept {

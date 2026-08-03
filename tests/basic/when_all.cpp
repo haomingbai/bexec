@@ -349,7 +349,7 @@ TEST(basic, when_all_aggregation_paths) {
     using sender_type =
         decltype(bexec::when_all(bexec::just(), bexec::just_error(7)));
     using variant_type = sender_type::error_variant;
-    static_assert(std::variant_size_v<variant_type> >= 2);
+    static_assert(std::variant_size_v<variant_type> >= 1);
 
     variant_receiver<variant_type> receiver;
     auto state = receiver.state;
@@ -379,7 +379,7 @@ TEST(basic, when_all_aggregation_paths) {
     using sender_type = decltype(bexec::when_all(
         bexec::just_error(3), bexec::just_error(std::string{"later"})));
     using variant_type = sender_type::error_variant;
-    static_assert(std::variant_size_v<variant_type> >= 3);
+    static_assert(std::variant_size_v<variant_type> >= 2);
 
     variant_receiver<variant_type> receiver;
     auto state = receiver.state;
@@ -488,6 +488,24 @@ TEST(basic, when_all_aggregation_paths) {
     EXPECT_EQ(state->int_value, 17);
     EXPECT_EQ(state->string_value, "selected");
   }
+}
+
+TEST(basic, when_all_connect_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender = bexec::when_all(throwing_connect_sender{}, bexec::just(1));
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
+}
+
+TEST(basic, when_all_child_value_throws) {
+  auto state = std::make_shared<shared_state>();
+  auto sender = bexec::when_all(throwing_value_sender{}, bexec::just(1));
+  auto op = bexec::connect(std::move(sender), any_receiver{state});
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::error);
+  EXPECT_TRUE(static_cast<bool>(state->exception));
 }
 
 }  // namespace bexec_tests

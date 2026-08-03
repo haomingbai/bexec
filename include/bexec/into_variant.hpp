@@ -44,12 +44,17 @@ class into_variant_receiver {
   template <class... Args>
   void set_value(Args&&... args) noexcept {
     using tuple_type = decayed_tuple<Args...>;
-    if constexpr (std::is_nothrow_constructible_v<
-                      ValueVariant, std::in_place_type_t<tuple_type>,
-                      Args...>) {
+    if constexpr (std::is_nothrow_constructible_v<tuple_type, Args...> &&
+                  std::is_nothrow_constructible_v<ValueVariant, tuple_type>) {
+      // The alternative tuple and its wrap into the variant are both nothrow.
+      // Construct the tuple first and store it through std::variant's
+      // converting constructor (conditionally noexcept per the standard),
+      // keeping this path free of exception-handling constructs so it also
+      // compiles under -fno-exceptions. The in_place_type_t constructor of
+      // std::variant is not specified noexcept and cannot back a portable
+      // noexcept fast path.
       bexec::set_value(std::move(receiver_),
-                       ValueVariant{std::in_place_type<tuple_type>,
-                                    std::forward<Args>(args)...});
+                       ValueVariant{tuple_type{std::forward<Args>(args)...}});
     } else {
       try {
         bexec::set_value(std::move(receiver_),

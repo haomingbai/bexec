@@ -87,7 +87,8 @@ class receiver_scheduler_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) const {
+  auto connect(Receiver receiver) const
+      noexcept(std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{std::move(receiver)};
   }
 };

@@ -41,13 +41,28 @@ class repeat_until_sender {
   using sender_type = std::invoke_result_t<Factory&>;
   using value_signatures = detail::set_value_signatures_from_tuple_list_t<
       detail::sender_unique_value_tuple_list_t<sender_type>>;
+
+  // Noexcept extraction: when child value/error storage, the predicate, and
+  // the factory are all nothrow, the loop cannot report
+  // set_error(std::exception_ptr) and the signature is omitted.
+  static constexpr bool errors_nothrow = detail::all_errors_nothrow_store_v<
+      detail::sender_completion_signatures_t<sender_type>>;
+  static constexpr bool values_nothrow = detail::all_values_nothrow_store_v<
+      detail::sender_completion_signatures_t<sender_type>>;
+  static constexpr bool predicate_nothrow =
+      std::is_nothrow_invocable_v<Predicate&>;
+  static constexpr bool factory_nothrow = std::is_nothrow_invocable_v<Factory&>;
+  static constexpr bool need_exception_ptr = !(
+      errors_nothrow && values_nothrow && predicate_nothrow && factory_nothrow);
+
   using completion_signatures = detail::completion_signatures_from_type_list_t<
       detail::unique_type_list_t<detail::concat_type_lists_t<
           value_signatures, type_list<set_stopped_t()>,
           detail::set_error_signatures_from_type_list_t<
               detail::unique_type_list_t<detail::concat_type_lists_t<
                   detail::sender_error_types_t<sender_type>,
-                  type_list<std::exception_ptr>>>>>>>;
+                  detail::maybe_type_list_t<need_exception_ptr,
+                                            std::exception_ptr>>>>>>>;
 
   repeat_until_sender(Factory factory, Predicate predicate)
       : factory_(std::move(factory)), predicate_(std::move(predicate)) {}

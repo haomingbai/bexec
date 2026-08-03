@@ -198,7 +198,8 @@ class non_movable_value_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) && {
+  auto connect(Receiver receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{value_, std::move(receiver)};
   }
 
@@ -234,7 +235,8 @@ class choice_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) const {
+  auto connect(Receiver receiver) const
+      noexcept(std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{use_string_, std::move(receiver)};
   }
 
@@ -284,6 +286,20 @@ struct two_variant_receiver {
 };
 
 }  // namespace
+
+// Type-level extraction: nothrow child value/error storage plus a nothrow
+// final value move omit set_error(std::exception_ptr) from when_all.
+using nothrow_when_all =
+    decltype(bexec::when_all(bexec::just(1), bexec::just(2)));
+static_assert(bexec::completion_signatures_of_t<
+                  nothrow_when_all>::template count_of<bexec::set_error_t>() ==
+                  0,
+              "nothrow when_all must not declare set_error(exception_ptr)");
+using error_when_all =
+    decltype(bexec::when_all(bexec::just_error(7), bexec::just(2)));
+static_assert(
+    std::variant_size_v<bexec::error_types_of_t<error_when_all>> == 1,
+    "nothrow error when_all must expose only the original error type");
 
 TEST(basic, when_all_aggregation_paths) {
   static_assert(!std::is_invocable_v<decltype(bexec::when_all)>);

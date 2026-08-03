@@ -9,6 +9,7 @@
  */
 
 #include <bexec/into_variant.hpp>
+#include <bexec/just.hpp>
 #include <bexec/sync_wait.hpp>
 #include <string>
 #include <tuple>
@@ -18,6 +19,14 @@
 #include "test_support.hpp"
 
 namespace bexec_tests {
+
+// Type-level extraction: nothrow value storage into the variant omits
+// set_error(std::exception_ptr).
+using nothrow_into_variant = decltype(bexec::into_variant(bexec::just(1)));
+static_assert(
+    bexec::completion_signatures_of_t<nothrow_into_variant>::template count_of<
+        bexec::set_error_t>() == 0,
+    "nothrow into_variant must not declare set_error(exception_ptr)");
 
 TEST(basic, into_variant_value_error_and_stopped_paths) {
   auto integer = bexec::this_thread::sync_wait_with_variant(

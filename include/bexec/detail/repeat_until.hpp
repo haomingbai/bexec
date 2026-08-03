@@ -78,10 +78,23 @@ class repeat_until_operation {
   using child_operation_type = decltype(bexec::connect(
       std::declval<sender_type>(), std::declval<child_receiver_type>()));
   using child_completions = sender_completion_signatures_t<sender_type>;
+  // Keep the stored completion set in lockstep with the sender's declared
+  // completion_signatures: exception_ptr is only needed when child value/error
+  // storage, the predicate, or the factory can throw.
+  static constexpr bool errors_nothrow =
+      all_errors_nothrow_store_v<child_completions>;
+  static constexpr bool values_nothrow =
+      all_values_nothrow_store_v<child_completions>;
+  static constexpr bool predicate_nothrow =
+      std::is_nothrow_invocable_v<Predicate&>;
+  static constexpr bool factory_nothrow = std::is_nothrow_invocable_v<Factory&>;
+  static constexpr bool need_exception_ptr = !(
+      errors_nothrow && values_nothrow && predicate_nothrow && factory_nothrow);
   using stored_completion_signatures = completion_signatures_from_type_list_t<
       unique_type_list_t<concat_type_lists_t<
           completion_signatures_to_type_list_t<child_completions>,
-          type_list<set_error_t(std::exception_ptr)>>>>;
+          maybe_type_list_t<need_exception_ptr,
+                            set_error_t(std::exception_ptr)>>>>;
   using stored_completion = completion_variant_t<stored_completion_signatures>;
 
   repeat_until_operation(Factory factory, Predicate predicate,

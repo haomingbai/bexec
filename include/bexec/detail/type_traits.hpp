@@ -200,6 +200,21 @@ struct let_signature<set_stopped_t, Fn, set_stopped_t()> {
       sender_completion_signatures_t<sender_type>>;
 };
 
+template <class Tag, class Fn, class Signature>
+struct let_invoke_nothrow : std::true_type {};
+
+template <class Fn, class... Args>
+struct let_invoke_nothrow<set_value_t, Fn, set_value_t(Args...)>
+    : std::is_nothrow_invocable<Fn&, Args...> {};
+
+template <class Fn, class Error>
+struct let_invoke_nothrow<set_error_t, Fn, set_error_t(Error)>
+    : std::is_nothrow_invocable<Fn&, Error> {};
+
+template <class Fn>
+struct let_invoke_nothrow<set_stopped_t, Fn, set_stopped_t()>
+    : std::is_nothrow_invocable<Fn&> {};
+
 template <class Tag, class Fn, class Completions>
 struct let_completion_signatures;
 
@@ -208,8 +223,13 @@ struct let_completion_signatures<Tag, Fn,
                                  completion_signatures<Signatures...>> {
   using transformed =
       concat_type_lists_t<typename let_signature<Tag, Fn, Signatures>::type...>;
+  // Only the fn invocation can throw inside let: a nothrow fn means the child
+  // sender's completions pass through unchanged and no exception_ptr is added.
+  static constexpr bool fn_nothrow =
+      (let_invoke_nothrow<Tag, Fn, Signatures>::value && ...);
   using with_exception = unique_type_list_t<concat_type_lists_t<
-      transformed, type_list<set_error_t(std::exception_ptr)>>>;
+      transformed,
+      maybe_type_list_t<!fn_nothrow, set_error_t(std::exception_ptr)>>>;
   using type = completion_signatures_from_type_list_t<with_exception>;
 };
 
@@ -251,8 +271,11 @@ struct let_completion_signatures_for_env<Tag, Fn, Env,
                                          completion_signatures<Signatures...>> {
   using transformed = concat_type_lists_t<
       typename let_signature_for_env<Tag, Fn, Env, Signatures>::type...>;
+  static constexpr bool fn_nothrow =
+      (let_invoke_nothrow<Tag, Fn, Signatures>::value && ...);
   using with_exception = unique_type_list_t<concat_type_lists_t<
-      transformed, type_list<set_error_t(std::exception_ptr)>>>;
+      transformed,
+      maybe_type_list_t<!fn_nothrow, set_error_t(std::exception_ptr)>>>;
   using type = completion_signatures_from_type_list_t<with_exception>;
 };
 
@@ -446,6 +469,85 @@ template <class ErrorList>
 using set_error_signatures_from_type_list_t =
     typename set_error_signatures_from_type_list<ErrorList>::type;
 
+// ---------------------------------------------------------------------------
+// Compile-time noexcept extraction helpers.
+//
+// These mirror the runtime `if constexpr` fast paths: when every value/error
+// completion can be stored without throwing, and every user callable on the
+// path is nothrow-invocable, an adaptor's completion_signatures need not
+// declare set_error_t(std::exception_ptr). Non-matching signatures are treated
+// as nothrow so an empty category (e.g. no error completions) folds to true.
+// ---------------------------------------------------------------------------
+
+// Whether the arguments of one value completion nothrow-construct the stored
+// decayed tuple (the runtime store_value fast-path condition).
+template <class Signature>
+struct value_signature_nothrow_store : std::true_type {};
+
+template <class... Args>
+struct value_signature_nothrow_store<set_value_t(Args...)>
+    : std::is_nothrow_constructible<decayed_tuple<Args...>, Args...> {};
+
+// Whether the error type of one error completion nothrow-constructs its stored
+// decayed form (the runtime store_error fast-path condition).
+template <class Signature>
+struct error_signature_nothrow_store : std::true_type {};
+
+template <class Error>
+struct error_signature_nothrow_store<set_error_t(Error)>
+    : std::is_nothrow_constructible<std::decay_t<Error>, Error> {};
+
+template <class Completions>
+struct all_values_nothrow_store;
+
+template <class... Signatures>
+struct all_values_nothrow_store<completion_signatures<Signatures...>>
+    : std::bool_constant<(value_signature_nothrow_store<Signatures>::value &&
+                          ...)> {};
+
+template <class Completions>
+inline constexpr bool all_values_nothrow_store_v =
+    all_values_nothrow_store<Completions>::value;
+
+template <class Completions>
+struct all_errors_nothrow_store;
+
+template <class... Signatures>
+struct all_errors_nothrow_store<completion_signatures<Signatures...>>
+    : std::bool_constant<(error_signature_nothrow_store<Signatures>::value &&
+                          ...)> {};
+
+template <class Completions>
+inline constexpr bool all_errors_nothrow_store_v =
+    all_errors_nothrow_store<Completions>::value;
+
+// Whether every argument of every completion signature nothrow-constructs its
+// stored decayed form (the spawn_future set_complete fast-path condition).
+template <class Signature>
+struct completion_args_nothrow_store : std::true_type {};
+
+template <class... Args>
+struct completion_args_nothrow_store<set_value_t(Args...)>
+    : std::bool_constant<(
+          std::is_nothrow_constructible_v<std::decay_t<Args>, Args> && ...)> {};
+
+template <class Error>
+struct completion_args_nothrow_store<set_error_t(Error)>
+    : std::bool_constant<
+          std::is_nothrow_constructible_v<std::decay_t<Error>, Error>> {};
+
+template <class Completions>
+struct all_completion_args_nothrow_store;
+
+template <class... Signatures>
+struct all_completion_args_nothrow_store<completion_signatures<Signatures...>>
+    : std::bool_constant<(completion_args_nothrow_store<Signatures>::value &&
+                          ...)> {};
+
+template <class Completions>
+inline constexpr bool all_completion_args_nothrow_store_v =
+    all_completion_args_nothrow_store<Completions>::value;
+
 template <class Tuple>
 struct value_completion {
   explicit value_completion(Tuple tuple) : values(std::move(tuple)) {}
@@ -514,11 +616,28 @@ template <class Sender>
 using into_variant_value_signature_list_t =
     type_list<set_value_t(into_variant_value_variant_t<Sender>)>;
 
+template <class Variant, class TupleList>
+struct variant_all_tuples_nothrow;
+
+template <class Variant, class... Tuples>
+struct variant_all_tuples_nothrow<Variant, type_list<Tuples...>>
+    : std::bool_constant<(std::is_nothrow_constructible_v<Variant, Tuples> &&
+                          ...)> {};
+
 template <class Sender>
 struct into_variant_completion_signatures {
+  using value_variant = into_variant_value_variant_t<Sender>;
   using values = into_variant_value_signature_list_t<Sender>;
+  // The runtime fast path stores the tuple, then wraps it into the variant via
+  // std::variant's converting constructor. Mirror both conditions.
+  static constexpr bool values_nothrow =
+      all_values_nothrow_store_v<sender_completion_signatures_t<Sender>> &&
+      variant_all_tuples_nothrow<
+          value_variant, sender_unique_value_tuple_list_t<Sender>>::value;
   using errors = set_error_signatures_from_type_list_t<
-      sender_errors_with_exception_t<Sender>>;
+      unique_type_list_t<concat_type_lists_t<
+          sender_error_types_t<Sender>,
+          maybe_type_list_t<!values_nothrow, std::exception_ptr>>>>;
   using stopped = std::conditional_t<sender_sends_stopped_v<Sender>,
                                      type_list<set_stopped_t()>, type_list<>>;
   using signatures =

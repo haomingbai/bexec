@@ -51,31 +51,94 @@ template <class Env, class... Senders>
 using when_all_values_tuple_for_env_t =
     std::tuple<when_all_value_slot_t<Senders, Env>...>;
 
-template <class... Senders>
-using when_all_error_list_t =
-    unique_type_list_t<concat_type_lists_t<sender_error_types_t<Senders>...,
-                                           type_list<std::exception_ptr>>>;
+// Minimal stop callback shared by when_all_state and the type-level
+// stop-callback noexcept analysis below.
+struct when_all_stop_request {
+  inplace_stop_source* source;
 
-template <class Env, class... Senders>
+  void operator()() const noexcept { source->request_stop(); }
+};
+
+// Noexcept extraction for when_all: child value/error storage plus the final
+// value deliver (tuple_cat move) must all be nothrow before exception_ptr is
+// omitted from the error set. stop-token callback construction depends on the
+// receiver environment and is intentionally not analysed here.
+template <class... Senders>
+struct when_all_nothrow_extraction {
+  static constexpr bool values_nothrow =
+      (all_values_nothrow_store_v<sender_completion_signatures_t<Senders>> &&
+       ...);
+  static constexpr bool errors_nothrow =
+      (all_errors_nothrow_store_v<sender_completion_signatures_t<Senders>> &&
+       ...);
+  static constexpr bool move_nothrow =
+      std::is_nothrow_move_constructible_v<when_all_values_tuple_t<Senders...>>;
+  static constexpr bool value =
+      values_nothrow && errors_nothrow && move_nothrow;
+};
+
+template <class... Senders>
+inline constexpr bool when_all_nothrow_v =
+    when_all_nothrow_extraction<Senders...>::value;
+
+// Environment-aware extraction. `Env` is the child environment (carrying an
+// inplace_stop_token injected by when_all); `RawEnv` is the original receiver
+// environment whose stop token drives the real stop-callback construction.
+template <class Env, class RawEnv, class... Senders>
+struct when_all_nothrow_for_env_extraction {
+  static constexpr bool values_nothrow =
+      (all_values_nothrow_store_v<
+           sender_completion_signatures_t<Senders, Env>> &&
+       ...);
+  static constexpr bool errors_nothrow =
+      (all_errors_nothrow_store_v<
+           sender_completion_signatures_t<Senders, Env>> &&
+       ...);
+  static constexpr bool move_nothrow = std::is_nothrow_move_constructible_v<
+      when_all_values_tuple_for_env_t<Env, Senders...>>;
+  using stop_token_type = remove_cvref_t<decltype(bexec::get_stop_token(
+      std::declval<const RawEnv&>()))>;
+  static constexpr bool stop_callback_nothrow =
+      std::same_as<stop_token_type, bexec::never_stop_token> ||
+      std::is_nothrow_constructible_v<
+          typename stop_token_type::template callback_type<
+              when_all_stop_request>,
+          stop_token_type, when_all_stop_request>;
+  static constexpr bool value =
+      values_nothrow && errors_nothrow && move_nothrow && stop_callback_nothrow;
+};
+
+template <class Env, class RawEnv, class... Senders>
+inline constexpr bool when_all_nothrow_for_env_v =
+    when_all_nothrow_for_env_extraction<Env, RawEnv, Senders...>::value;
+
+template <class... Senders>
+using when_all_error_list_t = unique_type_list_t<concat_type_lists_t<
+    sender_error_types_t<Senders>...,
+    maybe_type_list_t<!when_all_nothrow_v<Senders...>, std::exception_ptr>>>;
+
+template <class Env, class RawEnv, class... Senders>
 using when_all_error_list_for_env_t = unique_type_list_t<concat_type_lists_t<
-    sender_error_types_t<Senders, Env>..., type_list<std::exception_ptr>>>;
+    sender_error_types_t<Senders, Env>...,
+    maybe_type_list_t<!when_all_nothrow_for_env_v<Env, RawEnv, Senders...>,
+                      std::exception_ptr>>>;
 
 template <class... Senders>
 using when_all_error_variant_t =
     variant_from_type_list_t<when_all_error_list_t<Senders...>>;
 
-template <class Env, class... Senders>
-using when_all_error_variant_for_env_t =
-    variant_from_type_list_t<when_all_error_list_for_env_t<Env, Senders...>>;
+template <class Env, class RawEnv, class... Senders>
+using when_all_error_variant_for_env_t = variant_from_type_list_t<
+    when_all_error_list_for_env_t<Env, RawEnv, Senders...>>;
 
 template <class... Senders>
 using when_all_error_signature_list_t =
     set_error_signatures_from_type_list_t<when_all_error_list_t<Senders...>>;
 
-template <class Env, class... Senders>
+template <class Env, class RawEnv, class... Senders>
 using when_all_error_signature_list_for_env_t =
     set_error_signatures_from_type_list_t<
-        when_all_error_list_for_env_t<Env, Senders...>>;
+        when_all_error_list_for_env_t<Env, RawEnv, Senders...>>;
 
 template <class... Senders>
 using when_all_stopped_signature_list_t =
@@ -100,27 +163,24 @@ template <class... Senders>
 using when_all_completion_signatures_t =
     typename when_all_completion_signatures<Senders...>::type;
 
-template <class Env, class... Senders>
+template <class Env, class RawEnv, class... Senders>
 struct when_all_completion_signatures_for_env {
   using signatures = unique_type_list_t<concat_type_lists_t<
       when_all_value_signature_list_for_env_t<Env, Senders...>,
-      when_all_error_signature_list_for_env_t<Env, Senders...>,
+      when_all_error_signature_list_for_env_t<Env, RawEnv, Senders...>,
       when_all_stopped_signature_list_for_env_t<Env, Senders...>>>;
   using type = completion_signatures_from_type_list_t<signatures>;
 };
 
-template <class Env, class... Senders>
+template <class Env, class RawEnv, class... Senders>
 using when_all_completion_signatures_for_env_t =
-    typename when_all_completion_signatures_for_env<Env, Senders...>::type;
+    typename when_all_completion_signatures_for_env<Env, RawEnv,
+                                                    Senders...>::type;
 
 template <class Receiver, class ErrorVariant, class ValuesTuple,
           bool SendsValue, class SenderTuple>
 struct when_all_state {
-  struct on_stop_request {
-    inplace_stop_source* source;
-
-    void operator()() const noexcept { source->request_stop(); }
-  };
+  using on_stop_request = when_all_stop_request;
 
   using stop_token_type = remove_cvref_t<decltype(bexec::get_stop_token(
       bexec::get_env(std::declval<Receiver&>())))>;
@@ -276,7 +336,7 @@ struct when_all_state {
   }
 
   template <class Error>
-  void store_error(Error&& error_value) noexcept {
+  void store_error(Error&& error_value) {
     using error_type = std::decay_t<Error>;
     if constexpr (variant_contains_v<error_type, ErrorVariant>) {
       error.emplace(std::in_place_type<error_type>,

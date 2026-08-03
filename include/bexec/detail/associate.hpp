@@ -495,9 +495,11 @@ struct spawn_future_result_variant;
 template <class... Signatures>
 struct spawn_future_result_variant<completion_signatures<Signatures...>> {
   using exception_result = std::tuple<set_error_t, std::exception_ptr>;
+  static constexpr bool need_exception = !all_completion_args_nothrow_store_v<
+      completion_signatures<Signatures...>>;
   using result_list = unique_type_list_t<
       concat_type_lists_t<type_list<std::monostate, std::tuple<set_stopped_t>>,
-                          type_list<exception_result>,
+                          maybe_type_list_t<need_exception, exception_result>,
                           type_list<completion_result_tuple_t<Signatures>...>>>;
   using type = variant_from_type_list_t<result_list>;
 };
@@ -513,8 +515,11 @@ template <class... Signatures>
 struct spawn_future_completion_signatures<
     completion_signatures<Signatures...>> {
   using exception_signature = set_error_t(std::exception_ptr);
+  static constexpr bool need_exception = !all_completion_args_nothrow_store_v<
+      completion_signatures<Signatures...>>;
   using signature_list = unique_type_list_t<concat_type_lists_t<
-      type_list<set_stopped_t()>, type_list<exception_signature>,
+      type_list<set_stopped_t()>,
+      maybe_type_list_t<need_exception, exception_signature>,
       type_list<decayed_completion_signature_t<Signatures>...>>>;
   using type = completion_signatures_from_type_list_t<signature_list>;
 };

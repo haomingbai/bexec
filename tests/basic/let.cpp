@@ -29,6 +29,22 @@
 #include "test_support.hpp"
 
 namespace bexec_tests {
+
+// Type-level extraction: a noexcept let fn omits set_error(std::exception_ptr).
+using nothrow_let =
+    decltype(bexec::just(1) |
+             bexec::let_value([](int v) noexcept { return bexec::just(v); }));
+static_assert(
+    bexec::completion_signatures_of_t<nothrow_let>::template count_of<
+        bexec::set_error_t>() == 0,
+    "noexcept let_value fn must not declare set_error(exception_ptr)");
+using throwing_let = decltype(bexec::just(1) | bexec::let_value([](int) {
+                                return bexec::just(2);
+                              }));
+static_assert(bexec::completion_signatures_of_t<
+                  throwing_let>::template count_of<bexec::set_error_t>() == 1,
+              "throwing let_value fn must declare set_error(exception_ptr)");
+
 namespace {
 
 class non_movable_value_sender {

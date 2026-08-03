@@ -28,6 +28,30 @@
 
 namespace bexec_tests {
 
+// Type-level extraction: a noexcept factory + noexcept predicate with nothrow
+// child value/error storage declares no set_error(std::exception_ptr); a
+// throwing predicate or factory keeps it.
+using nothrow_repeat = decltype(bexec::repeat_until(
+    []() noexcept { return bexec::just(1); }, []() noexcept { return true; }));
+static_assert(
+    bexec::completion_signatures_of_t<nothrow_repeat>::template count_of<
+        bexec::set_error_t>() == 0,
+    "noexcept repeat_until must not declare set_error(exception_ptr)");
+using throwing_predicate_repeat = decltype(bexec::repeat_until(
+    []() noexcept { return bexec::just(1); }, []() -> bool { throw 1; }));
+static_assert(
+    bexec::completion_signatures_of_t<
+        throwing_predicate_repeat>::template count_of<bexec::set_error_t>() ==
+        1,
+    "throwing predicate repeat_until must declare set_error(exception_ptr)");
+using throwing_factory_repeat =
+    decltype(bexec::repeat_until([]() -> bexec::just_sender<int> { throw 1; },
+                                 []() noexcept { return true; }));
+static_assert(
+    bexec::completion_signatures_of_t<
+        throwing_factory_repeat>::template count_of<bexec::set_error_t>() == 1,
+    "throwing factory repeat_until must declare set_error(exception_ptr)");
+
 TEST(basic, repeat_until_completion_paths) {
   {
     int count = 0;

@@ -151,12 +151,10 @@ TEST(basic, completion_signature_contracts) {
   static_assert(!bexec::sends_stopped<let_stopped_int>);
 
   using all = decltype(bexec::when_all(bexec::just(), bexec::just_error(7)));
-  static_assert(std::same_as<bexec::completion_signatures_of_t<all>,
-                             bexec::completion_signatures<
-                                 bexec::set_error_t(int),
-                                 bexec::set_error_t(std::exception_ptr)>>);
-  static_assert(std::same_as<bexec::error_types_of_t<all>,
-                             std::variant<int, std::exception_ptr>>);
+  static_assert(
+      std::same_as<bexec::completion_signatures_of_t<all>,
+                   bexec::completion_signatures<bexec::set_error_t(int)>>);
+  static_assert(std::same_as<bexec::error_types_of_t<all>, std::variant<int>>);
 
   static_assert(bexec::sender<env_dependent_sender>);
   static_assert(bexec::sender_in<env_dependent_sender, flag_env>);
@@ -170,15 +168,11 @@ TEST(basic, completion_signature_contracts) {
 
   using env_all = decltype(bexec::when_all(env_dependent_sender{}));
   static_assert(
-      std::same_as<
-          bexec::completion_signatures_of_t<env_all>,
-          bexec::completion_signatures<
-              bexec::set_value_t(), bexec::set_error_t(std::exception_ptr)>>);
+      std::same_as<bexec::completion_signatures_of_t<env_all>,
+                   bexec::completion_signatures<bexec::set_value_t()>>);
   static_assert(
       std::same_as<bexec::completion_signatures_of_t<env_all, flag_env>,
-                   bexec::completion_signatures<bexec::set_value_t(int),
-                                                bexec::set_error_t(
-                                                    std::exception_ptr)>>);
+                   bexec::completion_signatures<bexec::set_value_t(int)>>);
 
   static_assert(bexec::operation_state<good_operation>);
   static_assert(!bexec::operation_state<throwing_operation>);

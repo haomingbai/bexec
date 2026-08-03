@@ -141,6 +141,7 @@ bexec_add_feature_test(
 bexec_add_feature_test(
     when_all
     basic/when_all.cpp
+    basic/when_all_extraction.cpp
     integration/when_all.cpp
     stress/when_all.cpp
 )

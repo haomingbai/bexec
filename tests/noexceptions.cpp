@@ -45,6 +45,10 @@ int main() {
   // then: noexcept fn branch.
   {
     auto s = bexec::just(1) | bexec::then([](int x) noexcept { return x + 1; });
+    static_assert(
+        bexec::completion_signatures_of_t<decltype(s)>::template count_of<
+            bexec::set_error_t>() == 0,
+        "noexcept then must not declare set_error");
     auto op = bexec::connect(std::move(s), recv{});
     bexec::start(op);
   }
@@ -53,6 +57,10 @@ int main() {
   {
     auto s = bexec::just(1) |
              bexec::let_value([](int v) noexcept { return bexec::just(v); });
+    static_assert(
+        bexec::completion_signatures_of_t<decltype(s)>::template count_of<
+            bexec::set_error_t>() == 0,
+        "noexcept let_value must not declare set_error");
     auto op = bexec::connect(std::move(s), recv{});
     bexec::start(op);
   }
@@ -60,6 +68,10 @@ int main() {
   // when_all: noexcept value storage + noexcept child connect.
   {
     auto s = bexec::when_all(bexec::just(1), bexec::just(2));
+    static_assert(
+        bexec::completion_signatures_of_t<decltype(s)>::template count_of<
+            bexec::set_error_t>() == 0,
+        "noexcept when_all must not declare set_error");
     auto op = bexec::connect(std::move(s), recv{});
     bexec::start(op);
   }
@@ -67,6 +79,10 @@ int main() {
   // into_variant: noexcept value storage.
   {
     auto s = bexec::into_variant(bexec::just(1));
+    static_assert(
+        bexec::completion_signatures_of_t<decltype(s)>::template count_of<
+            bexec::set_error_t>() == 0,
+        "noexcept into_variant must not declare set_error");
     auto op = bexec::connect(std::move(s), recv{});
     bexec::start(op);
   }
@@ -85,6 +101,10 @@ int main() {
   {
     auto s = bexec::repeat_until([]() noexcept { return bexec::just(1); },
                                  []() noexcept { return true; });
+    static_assert(
+        bexec::completion_signatures_of_t<decltype(s)>::template count_of<
+            bexec::set_error_t>() == 0,
+        "noexcept repeat_until must not declare set_error");
     auto op = bexec::connect(std::move(s), recv{});
     bexec::start(op);
   }

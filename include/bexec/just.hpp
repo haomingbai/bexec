@@ -106,13 +106,17 @@ class just_error_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) && {
+  auto connect(Receiver receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<Error> &&
+      std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{std::move(error_), std::move(receiver)};
   }
 
   template <class Receiver>
     requires std::copy_constructible<Error>
-  auto connect(Receiver receiver) const& {
+  auto connect(Receiver receiver) const& noexcept(
+      std::is_nothrow_copy_constructible_v<Error> &&
+      std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{error_, std::move(receiver)};
   }
 
@@ -140,7 +144,8 @@ class just_stopped_sender {
   };
 
   template <class Receiver>
-  auto connect(Receiver receiver) const {
+  auto connect(Receiver receiver) const
+      noexcept(std::is_nothrow_move_constructible_v<Receiver>) {
     return operation<Receiver>{std::move(receiver)};
   }
 };

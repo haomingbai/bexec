@@ -92,7 +92,13 @@ class into_variant_sender {
       : sender_(std::forward<SenderArg>(sender)) {}
 
   template <class Receiver>
-  auto connect(Receiver receiver) && {
+  auto connect(Receiver receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<Sender> &&
+      std::is_nothrow_move_constructible_v<Receiver> &&
+      noexcept(bexec::connect(
+          std::declval<Sender>(),
+          std::declval<
+              detail::into_variant_receiver<Receiver, value_variant>>()))) {
     using wrapped_type = detail::into_variant_receiver<Receiver, value_variant>;
     using operation_type = decltype(bexec::connect(
         std::declval<Sender>(), std::declval<wrapped_type>()));
@@ -107,7 +113,13 @@ class into_variant_sender {
 
   template <class Receiver>
     requires std::copy_constructible<Sender>
-  auto connect(Receiver receiver) const& {
+  auto connect(Receiver receiver) const& noexcept(
+      std::is_nothrow_copy_constructible_v<Sender> &&
+      std::is_nothrow_move_constructible_v<Receiver> &&
+      noexcept(bexec::connect(
+          std::declval<const Sender&>(),
+          std::declval<
+              detail::into_variant_receiver<Receiver, value_variant>>()))) {
     using wrapped_type = detail::into_variant_receiver<Receiver, value_variant>;
     using operation_type = decltype(bexec::connect(
         std::declval<const Sender&>(), std::declval<wrapped_type>()));

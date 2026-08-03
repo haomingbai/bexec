@@ -156,7 +156,8 @@ struct throwing_value_sender {
  * @brief Sender whose connect() always throws.
  *
  * Exercises the "connect may throw" branch of adaptors that wrap child
- * connect/start (e.g. when_all/let/on operation states).
+ * connect/start (e.g. when_all/let/on operation states). Declares the
+ * std::exception_ptr error it produces through that branch.
  */
 struct throwing_connect_sender {
   struct op {
@@ -164,7 +165,8 @@ struct throwing_connect_sender {
   };
 
   using completion_signatures =
-      bexec::completion_signatures<bexec::set_value_t()>;
+      bexec::completion_signatures<bexec::set_value_t(),
+                                   bexec::set_error_t(std::exception_ptr)>;
 
   template <class Receiver>
   op connect(Receiver&&) {

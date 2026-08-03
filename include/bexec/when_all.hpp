@@ -58,7 +58,7 @@ class when_all_sender {
   template <class Self, class Env>
   [[nodiscard]] static consteval auto get_completion_signatures() {
     using child_env = env_with_stop_token<Env>;
-    return detail::when_all_completion_signatures_for_env_t<child_env,
+    return detail::when_all_completion_signatures_for_env_t<child_env, Env,
                                                             Senders...>{};
   }
 
@@ -67,12 +67,20 @@ class when_all_sender {
 
   template <class Receiver>
   class operation {
+    // The completion path moves the receiver inside the noexcept finish_one /
+    // start_error critical sections; a throwing move would std::terminate and
+    // cannot be turned into set_error(std::exception_ptr). Reject it at
+    // compile time, mirroring the noexcept-child-connect guard in start_one.
+    static_assert(std::is_nothrow_move_constructible_v<Receiver>,
+                  "when_all requires a nothrow-move-constructible receiver");
+
    public:
     using sender_tuple = std::tuple<Senders...>;
     using receiver_env = decltype(bexec::get_env(std::declval<Receiver&>()));
     using child_env = env_with_stop_token<receiver_env>;
     using error_variant =
-        detail::when_all_error_variant_for_env_t<child_env, Senders...>;
+        detail::when_all_error_variant_for_env_t<child_env, receiver_env,
+                                                 Senders...>;
     using values_tuple =
         detail::when_all_values_tuple_for_env_t<child_env, Senders...>;
     static constexpr bool sends_value =
@@ -126,14 +134,24 @@ class when_all_sender {
         });
         bexec::start(*slot);
       } else {
-        try {
-          slot.emplace_from([this]() -> child_operation {
-            return bexec::connect(std::move(std::get<Index>(senders_)),
-                                  child_receiver{state_});
-          });
-          bexec::start(*slot);
-        } catch (...) {
-          state_.child_error(std::current_exception());
+        // When the extracted error set carries no std::exception_ptr, the
+        // child connect must be noexcept; a connect that may throw cannot be
+        // represented and is rejected at compile time.
+        if constexpr (detail::variant_contains_v<std::exception_ptr,
+                                                 error_variant>) {
+          try {
+            slot.emplace_from([this]() -> child_operation {
+              return bexec::connect(std::move(std::get<Index>(senders_)),
+                                    child_receiver{state_});
+            });
+            bexec::start(*slot);
+          } catch (...) {
+            state_.child_error(std::current_exception());
+          }
+        } else {
+          static_assert(detail::dependent_false<std::size_t>,
+                        "when_all requires a noexcept child connect when its "
+                        "extracted error set omits std::exception_ptr");
         }
       }
     }

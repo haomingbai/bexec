@@ -201,5 +201,5 @@ set_tests_properties(
 
 add_custom_target(
     bexec_tests
-    DEPENDS ${BEXEC_TEST_TARGETS} bexec_header_self_contained
+    DEPENDS ${BEXEC_TEST_TARGETS} bexec_header_self_contained bexec_test_noexceptions
 )

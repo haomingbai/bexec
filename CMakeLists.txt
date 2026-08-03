@@ -12,7 +12,7 @@
 
 cmake_minimum_required(VERSION 3.20)
 
-set(BEXEC_VERSION "0.0.1" CACHE STRING "bexec package version")
+set(BEXEC_VERSION "0.0.3" CACHE STRING "bexec package version")
 
 project(
     bexec

@@ -41,9 +41,7 @@ class let_child_receiver {
  public:
   explicit let_child_receiver(Operation& parent) : parent_(&parent) {}
 
-  [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>())))
-          -> decltype(bexec::get_env(std::declval<Receiver&>())) {
+  [[nodiscard]] decltype(auto) get_env() const noexcept {
     return bexec::get_env(parent_->receiver());
   }
 
@@ -138,9 +136,7 @@ class let_receiver {
  public:
   explicit let_receiver(Operation& parent) : parent_(&parent) {}
 
-  [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>())))
-          -> decltype(bexec::get_env(std::declval<Receiver&>())) {
+  [[nodiscard]] decltype(auto) get_env() const noexcept {
     return bexec::get_env(parent_->receiver());
   }
 
@@ -189,6 +185,10 @@ class let_operation {
 
   template <class SenderArg, class FnArg>
   let_operation(SenderArg&& sender, FnArg&& fn, Receiver receiver)
+      noexcept(std::is_nothrow_constructible_v<Fn, FnArg> &&
+               std::is_nothrow_move_constructible_v<Receiver> &&
+               noexcept(bexec::connect(std::declval<SenderArg>(),
+                                       std::declval<upstream_receiver_type>())))
       : fn_(std::forward<FnArg>(fn)), receiver_(std::move(receiver)) {
     upstream_.emplace_from([this, &sender]() -> upstream_operation_type {
       return bexec::connect(std::forward<SenderArg>(sender),

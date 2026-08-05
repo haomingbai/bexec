@@ -99,6 +99,9 @@ class repeat_until_operation {
 
   repeat_until_operation(Factory factory, Predicate predicate,
                          Receiver receiver)
+      noexcept(std::is_nothrow_move_constructible_v<Factory> &&
+               std::is_nothrow_move_constructible_v<Predicate> &&
+               std::is_nothrow_move_constructible_v<Receiver>)
       : factory_(std::move(factory)),
         predicate_(std::move(predicate)),
         receiver_(std::move(receiver)) {}
@@ -267,7 +270,11 @@ class repeat_until_operation {
           });
           bexec::start(*current_);
         } catch (...) {
-          bexec::set_error(std::move(receiver_), std::current_exception());
+          if constexpr (need_exception_ptr) {
+            bexec::set_error(std::move(receiver_), std::current_exception());
+          } else {
+            std::terminate();
+          }
           break;
         }
       }

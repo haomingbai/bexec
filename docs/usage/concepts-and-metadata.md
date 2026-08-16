@@ -133,6 +133,25 @@ constexpr bool can_stop = bexec::sends_stopped<MySender>;
 constexpr bool can_stop_env = bexec::sends_stopped<MySender, MyEnv>;
 ```
 
+### Compile-Time `noexcept` Extraction
+
+Adaptors analyze at the type level whether any completion path can throw, and
+omit `set_error_t(std::exception_ptr)` from their completion signatures when
+no throwing source exists:
+
+- value and error storage: argument types must be nothrow-constructible into
+  their stored (decayed) form;
+- user callables (`then`/`let` functions, the `repeat_until` predicate and
+  factory): must be nothrow-invocable;
+- `into_variant`: each value tuple must load into the result variant through
+  its conditionally `noexcept` converting constructor.
+
+Whether a child `connect` can throw cannot be analyzed at the type level
+(completion signatures have no receiver parameter), so adaptors treat a
+`noexcept` child `connect` as an implicit prerequisite once extraction
+succeeds. `when_all` enforces this prerequisite with a compile-time check;
+see [algorithms.md](algorithms.md).
+
 ### The `completion_signatures` Type
 
 ```cpp

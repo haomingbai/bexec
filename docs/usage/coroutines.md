@@ -85,7 +85,25 @@ or application-specific environment queries to an awaited sender.
 
 ## `task<T>`
 
-Tasks remain lazy and move-only:
+`task<T>` is itself a sender. Its completion signatures are
+`set_value_t(T)`, `set_error_t(std::exception_ptr)`, and `set_stopped_t()`,
+so a task can be connected directly or passed to adaptors and consumers such
+as `then`, `when_all`, `sync_wait`, or `spawn_future`:
+
+```cpp
+auto operation = bexec::connect(compute(loop), receiver{});
+bexec::start(operation);
+```
+
+`connect` is only available on rvalue tasks. This enforces a one-to-one
+relationship between a task and its receiver: a coroutine frame is registered
+exactly once and can never be resumed twice. The returned operation state
+takes ownership of the coroutine frame and destroys it; when the coroutine
+reaches its final suspend point it delivers its stored result through
+`set_value`, `set_error`, or `set_stopped` on the connected receiver.
+
+Tasks remain lazy and move-only, and the root API is unchanged for tasks that
+were never connected:
 
 ```cpp
 auto task = compute(loop);
@@ -97,17 +115,22 @@ loop.run();
 int value = task.result();
 ```
 
-Tasks can also await temporary child tasks:
+Because a task is a sender, awaiting one from another task uses the generic
+sender bridge described above — there is no task-specific awaiter:
 
 ```cpp
 bexec::task<int> parent(bexec::run_loop& loop) {
-    int value = co_await compute(loop);
-    co_return value + 1;
+    int value = co_await compute(loop);          // temporary: implicitly an rvalue
+    bexec::task<int> named = compute(loop);
+    int other = co_await std::move(named);       // named tasks must be moved
+    co_return value + other;
 }
 ```
 
-Only rvalue tasks are awaitable because awaiting consumes ownership of the child
-coroutine. `task<void>` follows the same rules without a returned value.
+Only rvalue tasks are awaitable: awaiting connects the child task, which
+consumes ownership of the child coroutine. Awaiting an lvalue task is a
+compile-time error. `task<void>` follows the same rules without a returned
+value.
 
 `result()` rethrows an unhandled exception. If the task completed through
 `set_stopped`, it throws `bexec::task_stopped`.

@@ -36,7 +36,6 @@ P2300-inspired library.
 
 ## Coroutines
 
-- Decide whether `task<T>` should become a sender.
 - Add cancellation propagation into coroutine tasks.
 - Add asynchronous generator/stream composition if a real call site requires
   an async iteration protocol.

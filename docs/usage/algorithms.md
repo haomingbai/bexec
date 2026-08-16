@@ -106,6 +106,16 @@ auto s = bexec::when_all_with_variant(maybe_int_or_string(), bexec::just(3));
 
 `when_all()` and `when_all_with_variant()` with zero senders are ill-formed.
 
+When a child sender's extracted error set omits `std::exception_ptr`,
+`when_all` requires that child's `connect` to be `noexcept` (see
+[concepts-and-metadata.md](concepts-and-metadata.md) for the compile-time
+noexcept extraction rules). A child that violates this is rejected by a
+`static_assert` at connect time; either declare the child's `connect`
+(conditionally) `noexcept`, or give the child an explicit
+`set_error_t(std::exception_ptr)` signature. The downstream receiver must
+also be nothrow move-constructible, which is enforced by a `static_assert` on
+the operation state.
+
 ## `repeat_until`
 
 `repeat_until(factory, predicate)` repeatedly creates and starts a fresh child

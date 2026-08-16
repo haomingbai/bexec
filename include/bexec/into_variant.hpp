@@ -137,7 +137,8 @@ class into_variant_sender {
 struct into_variant_closure {
   template <sender Sender>
     requires(detail::sender_value_completion_count_v<
-                 detail::remove_cvref_t<Sender>> != 0U)
+                 detail::remove_cvref_t<Sender>> != 0U) &&
+            std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) const {
     return into_variant_sender<detail::remove_cvref_t<Sender>>{
         std::forward<Sender>(sender)};
@@ -147,7 +148,8 @@ struct into_variant_closure {
 template <sender Sender>
   requires(
       detail::sender_value_completion_count_v<detail::remove_cvref_t<Sender>> !=
-      0U)
+      0U) &&
+          std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
 [[nodiscard]] auto operator|(Sender&& sender, into_variant_closure closure) {
   return closure(std::forward<Sender>(sender));
 }
@@ -160,7 +162,8 @@ struct into_variant_t {
 
   template <sender Sender>
     requires(detail::sender_value_completion_count_v<
-                 detail::remove_cvref_t<Sender>> != 0U)
+                 detail::remove_cvref_t<Sender>> != 0U) &&
+            std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) const {
     return into_variant_closure{}(std::forward<Sender>(sender));
   }

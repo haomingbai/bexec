@@ -184,6 +184,9 @@ struct when_all_t {
     requires(sizeof...(Senders) != 0 &&
              ((detail::sender_value_completion_count_v<
                    detail::remove_cvref_t<Senders>> <= 1U) &&
+              ...) &&
+             (std::constructible_from<detail::remove_cvref_t<Senders>,
+                                      Senders> &&
               ...))
   [[nodiscard]] auto operator()(Senders&&... senders) const {
     return when_all_sender<detail::remove_cvref_t<Senders>...>{
@@ -196,7 +199,10 @@ struct when_all_t {
  */
 struct when_all_with_variant_t {
   template <sender... Senders>
-    requires(sizeof...(Senders) != 0)
+    requires(sizeof...(Senders) != 0 &&
+             (std::constructible_from<detail::remove_cvref_t<Senders>,
+                                      Senders> &&
+              ...))
   [[nodiscard]] auto operator()(Senders&&... senders) const {
     return when_all_t{}(bexec::into_variant(std::forward<Senders>(senders))...);
   }

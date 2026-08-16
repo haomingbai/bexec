@@ -154,6 +154,24 @@ template <class ErrorVariant>
   BEXEC_DETAIL_UNREACHABLE();
 }
 
+/**
+ * @brief Whether a sender can be connected to the sync_wait receiver.
+ *
+ * Keeps unconnectable senders (e.g. an lvalue task, whose connect is
+ * rvalue-only) a constraint failure at the sync_wait call site instead of a
+ * hard error inside the function body.
+ */
+template <class Sender>
+concept sync_wait_connectable = requires(
+    Sender&& sender,
+    sync_wait_state<sync_wait_value_tuple_t<Sender>,
+                    sync_wait_error_variant_t<Sender>>& state) {
+  bexec::connect(
+      std::forward<Sender>(sender),
+      sync_wait_receiver<sync_wait_value_tuple_t<Sender>,
+                         sync_wait_error_variant_t<Sender>>{state});
+};
+
 }  // namespace detail
 
 /**
@@ -163,6 +181,7 @@ template <class ErrorVariant>
  * std::exception_ptr error is rethrown.
  */
 template <bexec::sender Sender>
+  requires detail::sync_wait_connectable<Sender>
 [[nodiscard]] auto sync_wait(Sender&& sender)
     -> std::optional<detail::sync_wait_value_tuple_t<Sender>> {
   using result_tuple = detail::sync_wait_value_tuple_t<Sender>;
@@ -193,7 +212,10 @@ template <bexec::sender Sender>
  */
 template <bexec::sender Sender>
   requires(bexec::detail::sender_value_completion_count_v<
-               bexec::detail::remove_cvref_t<Sender>> != 0U)
+               bexec::detail::remove_cvref_t<Sender>> != 0U) &&
+          requires(Sender&& sender) {
+            bexec::into_variant(std::forward<Sender>(sender));
+          }
 [[nodiscard]] auto sync_wait_with_variant(Sender&& sender)
     -> std::optional<bexec::detail::into_variant_value_variant_t<
         bexec::detail::remove_cvref_t<Sender>>> {

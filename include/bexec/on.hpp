@@ -513,6 +513,9 @@ class on_sender {
  */
 struct starts_on_t {
   template <scheduler Scheduler, sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Scheduler>,
+                                     Scheduler> &&
+                 std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Scheduler&& scheduler, Sender&& sender) const {
     return starts_on_sender<detail::remove_cvref_t<Scheduler>,
                             detail::remove_cvref_t<Sender>>{
@@ -525,6 +528,9 @@ struct starts_on_t {
  */
 struct on_t {
   template <scheduler Scheduler, sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Scheduler>,
+                                     Scheduler> &&
+                 std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Scheduler&& scheduler, Sender&& sender) const {
     return on_sender<detail::remove_cvref_t<Scheduler>,
                      detail::remove_cvref_t<Sender>>{

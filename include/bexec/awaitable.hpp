@@ -111,6 +111,23 @@ template <class Sender, class Promise>
 using sender_awaitable_value_t =
     typename sender_awaitable_value_traits_t<Sender, Promise>::type;
 
+/**
+ * @brief Probe receiver used to test connectability in awaitable_sender_for.
+ *
+ * Its completion members accept every signature, so the probe fails only when
+ * the sender has no connect for the receiver value category (e.g. task<T>
+ * connect is rvalue-only). Checking connectability here keeps sender_awaitable
+ * from being selected (and hard-erroring) for such senders.
+ */
+struct awaitable_connect_probe {
+  void set_value() noexcept;
+  template <class... Args>
+  void set_value(Args&&...) noexcept;
+  template <class Error>
+  void set_error(Error&&) noexcept;
+  void set_stopped() noexcept;
+};
+
 template <class Sender, class Promise>
 concept awaitable_sender_for =
     sender_in<Sender, sender_awaitable_env_t<Sender, Promise>> &&
@@ -119,6 +136,10 @@ concept awaitable_sender_for =
       {
         promise.unhandled_stopped()
       } -> std::convertible_to<std::coroutine_handle<>>;
+    } &&
+    requires(Sender&& sender) {
+      bexec::connect(std::forward<Sender>(sender),
+                     std::declval<awaitable_connect_probe>());
     };
 
 template <class T>

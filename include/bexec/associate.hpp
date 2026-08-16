@@ -79,11 +79,13 @@ class associate_closure {
       : token_(std::move(token)) {}
 
   template <sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) const& {
     return make_associated_sender(token_, std::forward<Sender>(sender));
   }
 
   template <sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) && {
     return make_associated_sender(std::move(token_),
                                   std::forward<Sender>(sender));
@@ -96,6 +98,7 @@ class associate_closure {
 }  // namespace detail
 
 template <sender Sender, scope_token Token>
+  requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
 [[nodiscard]] auto operator|(Sender&& sender,
                              detail::associate_closure<Token> closure) {
   return std::move(closure)(std::forward<Sender>(sender));
@@ -111,8 +114,9 @@ template <sender Sender, scope_token Token>
 struct associate_t {
   template <sender Sender, scope_token Token>
     requires bexec::sender<
-        detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
-            std::declval<const Token&>(), std::declval<Sender>()))>>
+                 detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
+                     std::declval<const Token&>(), std::declval<Sender>()))>> &&
+             std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Token token) const {
     return detail::make_associated_sender(std::move(token),
                                           std::forward<Sender>(sender));

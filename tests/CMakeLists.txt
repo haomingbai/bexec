@@ -155,7 +155,9 @@ bexec_add_feature_test(
     task
     basic/task.cpp
     integration/task.cpp
+    integration/task_as_sender.cpp
     stress/task.cpp
+    stress/task_as_sender.cpp
 )
 bexec_add_feature_test(
     generator

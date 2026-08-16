@@ -537,8 +537,9 @@ inline counting_scope::token counting_scope::get_token() noexcept {
 struct spawn_t {
   template <sender Sender, scope_token Token>
     requires detail::spawnable_sender_v<
-        detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
-            std::declval<const Token&>(), std::declval<Sender>()))>>
+                 detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
+                     std::declval<const Token&>(), std::declval<Sender>()))>> &&
+             std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   void operator()(Sender&& sender, Token token) const {
     detail::spawn(std::forward<Sender>(sender), std::move(token), empty_env{});
   }
@@ -547,7 +548,8 @@ struct spawn_t {
     requires detail::spawnable_sender_v<
                  detail::remove_cvref_t<decltype(detail::wrap_scope_sender(
                      std::declval<const Token&>(), std::declval<Sender>()))>> &&
-             std::copy_constructible<detail::remove_cvref_t<Env>>
+             std::copy_constructible<detail::remove_cvref_t<Env>> &&
+             std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   void operator()(Sender&& sender, Token token, Env&& env) const {
     detail::spawn(std::forward<Sender>(sender), std::move(token),
                   std::forward<Env>(env));
@@ -558,12 +560,14 @@ inline constexpr spawn_t spawn{};
 
 struct spawn_future_t {
   template <sender Sender, scope_token Token>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Token token) const {
     return detail::spawn_future(std::forward<Sender>(sender), std::move(token),
                                 empty_env{});
   }
 
   template <sender Sender, scope_token Token, class Env>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Token token, Env&& env) const {
     return detail::spawn_future(std::forward<Sender>(sender), std::move(token),
                                 std::forward<Env>(env));

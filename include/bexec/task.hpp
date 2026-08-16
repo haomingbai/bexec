@@ -14,11 +14,14 @@
 #define BEXEC_INCLUDE_BEXEC_TASK_HPP_
 
 #include <bexec/awaitable.hpp>
+#include <bexec/completion_signatures.hpp>
 #include <bexec/detail/config.hpp>
+#include <bexec/receiver.hpp>
 #include <cassert>
 #include <coroutine>
 #include <exception>
 #include <optional>
+#include <type_traits>
 #include <utility>
 
 namespace bexec {
@@ -40,62 +43,58 @@ class task_final_awaiter {
  public:
   [[nodiscard]] bool await_ready() const noexcept { return false; }
 
-  std::coroutine_handle<> await_suspend(
-      std::coroutine_handle<Promise> handle) const noexcept {
-    return handle.promise().continuation();
+  // The coroutine reached its end: deliver the stored completion to the
+  // connected receiver, if any. The receiver may resume (and thereby destroy)
+  // awaiting coroutines from here, so nothing touches the frame afterwards.
+  void await_suspend(std::coroutine_handle<Promise> handle) const noexcept {
+    handle.promise().dispatch_connected_completion();
   }
 
   void await_resume() const noexcept {}
 };
 
-template <class Promise>
-class task_awaiter {
+/**
+ * @brief Operation state produced by connecting a task to a receiver.
+ *
+ * Owns the coroutine frame moved out of the task and destroys it on
+ * destruction. Immovable because its address is registered in the promise for
+ * completion delivery.
+ */
+template <class Promise, class Receiver>
+class task_operation {
  public:
   using handle_type = std::coroutine_handle<Promise>;
 
-  explicit task_awaiter(handle_type handle) noexcept : handle_(handle) {}
+  // The frame is taken out of `task_handle` only after the receiver is
+  // stored, so a throwing receiver move leaves the source task intact.
+  task_operation(handle_type& task_handle, Receiver&& receiver) noexcept(
+      std::is_nothrow_move_constructible_v<Receiver>)
+      : receiver_(std::move(receiver)),
+        handle_(std::exchange(task_handle, {})) {
+    handle_.promise().register_connected_operation(
+        this, &task_operation::deliver);
+  }
 
-  task_awaiter(const task_awaiter&) = delete;
-  task_awaiter& operator=(const task_awaiter&) = delete;
-  task_awaiter(task_awaiter&&) = delete;
-  task_awaiter& operator=(task_awaiter&&) = delete;
+  task_operation(const task_operation&) = delete;
+  task_operation& operator=(const task_operation&) = delete;
+  task_operation(task_operation&&) = delete;
+  task_operation& operator=(task_operation&&) = delete;
 
-  ~task_awaiter() {
+  ~task_operation() {
     if (handle_) {
       handle_.destroy();
     }
   }
 
-  [[nodiscard]] bool await_ready() const noexcept {
-    return !handle_ || handle_.done();
-  }
-
-  template <class ParentPromise>
-  std::coroutine_handle<> await_suspend(
-      std::coroutine_handle<ParentPromise> parent) noexcept {
-    if (handle_.promise().stopped()) {
-      if constexpr (requires {
-                      {
-                        parent.promise().unhandled_stopped()
-                      } -> std::convertible_to<std::coroutine_handle<>>;
-                    }) {
-        return static_cast<std::coroutine_handle<>>(
-            parent.promise().unhandled_stopped());
-      } else {
-        assert(false);
-        BEXEC_DETAIL_UNREACHABLE();
-      }
-    }
-
-    handle_.promise().set_continuation(parent);
-    return handle_;
-  }
-
-  decltype(auto) await_resume() {
-    return handle_.promise().consume_await_result();
-  }
+  void start() noexcept { handle_.resume(); }
 
  private:
+  static void deliver(void* operation_address) noexcept {
+    auto& self = *static_cast<task_operation*>(operation_address);
+    self.handle_.promise().deliver_to(std::move(self.receiver_));
+  }
+
+  Receiver receiver_;
   handle_type handle_;
 };
 
@@ -108,6 +107,11 @@ void store_task_exception(Promise& promise) noexcept {
 
 /**
  * @brief Lazy, move-only coroutine task.
+ *
+ * A task is a single-shot sender: it connects to exactly one receiver through
+ * an rvalue-only connect(), and the returned operation owns the coroutine
+ * frame. A task that is never connected can still be driven manually with
+ * start()/result().
  */
 template <class T>
 class task {
@@ -115,9 +119,19 @@ class task {
   struct promise_type;
   using handle_type = std::coroutine_handle<promise_type>;
 
-  struct promise_type : with_awaitable_senders<promise_type> {
-    using awaitable_base = with_awaitable_senders<promise_type>;
+  /**
+   * @brief Exact completion contract of the task sender.
+   *
+   * The coroutine result is delivered as set_value(T), an escaping exception
+   * as set_error(std::exception_ptr), and a stopped signal from an awaited
+   * sender as set_stopped().
+   */
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t(T),
+                                   bexec::set_error_t(std::exception_ptr),
+                                   bexec::set_stopped_t()>;
 
+  struct promise_type : with_awaitable_senders<promise_type> {
     task get_return_object() noexcept {
       return task{handle_type::from_promise(*this)};
     }
@@ -136,12 +150,18 @@ class task {
 
     [[nodiscard]] bool stopped() const noexcept { return stopped_; }
 
+    /**
+     * @brief Marks the task stopped and reports to the connected receiver.
+     *
+     * Called by the sender bridge when an awaited sender completes stopped.
+     * The coroutine stays suspended at the await point and is destroyed with
+     * its owner; the stopped completion reaches the awaiting chain through
+     * the connected receiver.
+     */
     [[nodiscard]] std::coroutine_handle<> unhandled_stopped() noexcept {
       stopped_ = true;
-      if (this->continuation() == std::noop_coroutine()) {
-        return std::noop_coroutine();
-      }
-      return awaitable_base::unhandled_stopped();
+      dispatch_connected_completion();
+      return std::noop_coroutine();
     }
 
     T consume_result() {
@@ -153,11 +173,42 @@ class task {
       return std::move(*value_);
     }
 
-    T consume_await_result() {
-      rethrow_error();
-      assert(!stopped_);
-      assert(value_.has_value());
-      return std::move(*value_);
+    /**
+     * @brief Delivers the stored completion to a connected receiver.
+     *
+     * Invoked through the registered thunk once the task finishes. Receivers
+     * with a throwing-move value type are rejected by the set_value contract,
+     * so the calls themselves never throw.
+     */
+    template <class Receiver>
+    void deliver_to(Receiver&& receiver) noexcept {
+      if (error_) {
+        bexec::set_error(std::forward<Receiver>(receiver), error_);
+      } else if (stopped_) {
+        bexec::set_stopped(std::forward<Receiver>(receiver));
+      } else {
+        assert(value_.has_value());
+        bexec::set_value(std::forward<Receiver>(receiver), std::move(*value_));
+      }
+    }
+
+    /**
+     * @brief Registers the owning operation for completion delivery.
+     *
+     * connect() stores the operation address and a type-erased delivery thunk
+     * so final_suspend/unhandled_stopped can complete the receiver without
+     * the promise knowing its type.
+     */
+    void register_connected_operation(
+        void* operation, void (*deliver)(void*) noexcept) noexcept {
+      connected_operation_ = operation;
+      deliver_connected_ = deliver;
+    }
+
+    void dispatch_connected_completion() noexcept {
+      if (deliver_connected_ != nullptr) {
+        deliver_connected_(connected_operation_);
+      }
     }
 
    private:
@@ -173,6 +224,8 @@ class task {
     std::optional<T> value_;
     std::exception_ptr error_;
     bool stopped_{false};
+    void* connected_operation_{nullptr};
+    void (*deliver_connected_)(void*) noexcept {nullptr};
   };
 
   task() noexcept = default;
@@ -196,8 +249,8 @@ class task {
   /**
    * @brief Starts or manually resumes the task.
    *
-   * A task waiting for a sender or child task is resumed by that operation and
-   * must not be manually resumed.
+   * A task waiting for a sender is resumed by that operation and must not be
+   * manually resumed.
    */
   void start() {
     if (handle_ && !done()) {
@@ -215,9 +268,25 @@ class task {
     return handle_.promise().consume_result();
   }
 
-  detail::task_awaiter<promise_type> operator co_await() && noexcept {
-    return detail::task_awaiter<promise_type>{
-        std::exchange(handle_, handle_type{})};
+  /**
+   * @brief Connects this task to a receiver, transferring frame ownership.
+   *
+   * Rvalue-only: a task wraps a single-shot coroutine frame that can be
+   * resumed by exactly one operation, so it can be connected at most once and
+   * must not have been started already. The returned operation owns the frame
+   * and destroys it on destruction.
+   */
+  template <class Receiver>
+    requires bexec::receiver_of<std::remove_cvref_t<Receiver>,
+                                completion_signatures>
+  [[nodiscard]] detail::task_operation<promise_type,
+                                       std::remove_cvref_t<Receiver>>
+  connect(Receiver&& receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<std::remove_cvref_t<Receiver>>) {
+    assert(handle_ && "connect requires a task that still owns its frame");
+    return detail::task_operation<promise_type,
+                                  std::remove_cvref_t<Receiver>>{
+        handle_, std::forward<Receiver>(receiver)};
   }
 
  private:
@@ -240,9 +309,12 @@ class task<void> {
   struct promise_type;
   using handle_type = std::coroutine_handle<promise_type>;
 
-  struct promise_type : with_awaitable_senders<promise_type> {
-    using awaitable_base = with_awaitable_senders<promise_type>;
+  using completion_signatures =
+      bexec::completion_signatures<bexec::set_value_t(),
+                                   bexec::set_error_t(std::exception_ptr),
+                                   bexec::set_stopped_t()>;
 
+  struct promise_type : with_awaitable_senders<promise_type> {
     task get_return_object() noexcept {
       return task{handle_type::from_promise(*this)};
     }
@@ -260,10 +332,8 @@ class task<void> {
 
     [[nodiscard]] std::coroutine_handle<> unhandled_stopped() noexcept {
       stopped_ = true;
-      if (this->continuation() == std::noop_coroutine()) {
-        return std::noop_coroutine();
-      }
-      return awaitable_base::unhandled_stopped();
+      dispatch_connected_completion();
+      return std::noop_coroutine();
     }
 
     void consume_result() {
@@ -273,9 +343,27 @@ class task<void> {
       }
     }
 
-    void consume_await_result() {
-      rethrow_error();
-      assert(!stopped_);
+    template <class Receiver>
+    void deliver_to(Receiver&& receiver) noexcept {
+      if (error_) {
+        bexec::set_error(std::forward<Receiver>(receiver), error_);
+      } else if (stopped_) {
+        bexec::set_stopped(std::forward<Receiver>(receiver));
+      } else {
+        bexec::set_value(std::forward<Receiver>(receiver));
+      }
+    }
+
+    void register_connected_operation(
+        void* operation, void (*deliver)(void*) noexcept) noexcept {
+      connected_operation_ = operation;
+      deliver_connected_ = deliver;
+    }
+
+    void dispatch_connected_completion() noexcept {
+      if (deliver_connected_ != nullptr) {
+        deliver_connected_(connected_operation_);
+      }
     }
 
    private:
@@ -290,6 +378,8 @@ class task<void> {
 
     std::exception_ptr error_;
     bool stopped_{false};
+    void* connected_operation_{nullptr};
+    void (*deliver_connected_)(void*) noexcept {nullptr};
   };
 
   task() noexcept = default;
@@ -326,9 +416,17 @@ class task<void> {
     handle_.promise().consume_result();
   }
 
-  detail::task_awaiter<promise_type> operator co_await() && noexcept {
-    return detail::task_awaiter<promise_type>{
-        std::exchange(handle_, handle_type{})};
+  template <class Receiver>
+    requires bexec::receiver_of<std::remove_cvref_t<Receiver>,
+                                completion_signatures>
+  [[nodiscard]] detail::task_operation<promise_type,
+                                       std::remove_cvref_t<Receiver>>
+  connect(Receiver&& receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<std::remove_cvref_t<Receiver>>) {
+    assert(handle_ && "connect requires a task that still owns its frame");
+    return detail::task_operation<promise_type,
+                                  std::remove_cvref_t<Receiver>>{
+        handle_, std::forward<Receiver>(receiver)};
   }
 
  private:

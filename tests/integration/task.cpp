@@ -9,12 +9,15 @@
  */
 
 #include <bexec/just.hpp>
+#include <bexec/operation_state.hpp>
 #include <bexec/receiver.hpp>
 #include <bexec/run_loop.hpp>
 #include <bexec/scheduler.hpp>
+#include <bexec/sender.hpp>
 #include <bexec/task.hpp>
 #include <coroutine>
 #include <exception>
+#include <memory>
 #include <stdexcept>
 #include <utility>
 
@@ -310,16 +313,31 @@ TEST(integration, task_sender_error_and_stopped_propagation) {
   EXPECT_FALSE(caught);
   EXPECT_FALSE(catch_continued);
 
+  // New one-shot semantics: connecting a task transfers its frame to the
+  // operation, so a task can no longer be started first and awaited later.
+  // A fresh stopped child awaited through the sender bridge propagates
+  // stopped to the awaiting parent the same way.
   auto child = stopped_task(catch_continued);
-  child.start();
-  EXPECT_TRUE(child.done());
-
   auto await_existing =
       await_stopped_child(std::move(child), caught, catch_continued);
   await_existing.start();
   EXPECT_TRUE(await_existing.done());
   EXPECT_FALSE(caught);
   EXPECT_FALSE(catch_continued);
+}
+
+TEST(integration, task_connect_transfers_frame_ownership) {
+  auto child = indexed_task(42);
+  auto state = std::make_shared<shared_state>();
+  auto op = bexec::connect(std::move(child), any_receiver{state});
+
+  // The source task no longer owns the frame; the operation drives it.
+  EXPECT_TRUE(child.done());
+  EXPECT_EQ(state->signal, signal_kind::none);
+
+  bexec::start(op);
+  EXPECT_EQ(state->signal, signal_kind::value);
+  EXPECT_EQ(state->int_value, 42);
 }
 
 TEST(integration, task_supports_immovable_operations_and_promise_env) {

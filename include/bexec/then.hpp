@@ -42,12 +42,14 @@ class completion_adaptor_closure {
       : fn_(std::forward<FnArg>(fn)) {}
 
   template <sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) const& {
     return completion_adaptor_sender<Tag, detail::remove_cvref_t<Sender>, Fn>{
         std::forward<Sender>(sender), fn_};
   }
 
   template <sender Sender>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender) && {
     return completion_adaptor_sender<Tag, detail::remove_cvref_t<Sender>, Fn>{
         std::forward<Sender>(sender), std::move(fn_)};
@@ -58,6 +60,7 @@ class completion_adaptor_closure {
 };
 
 template <sender Sender, class Tag, class Fn>
+  requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
 [[nodiscard]] auto operator|(Sender&& sender,
                              completion_adaptor_closure<Tag, Fn> closure) {
   return std::move(closure)(std::forward<Sender>(sender));
@@ -132,6 +135,7 @@ struct then_t {
   }
 
   template <sender Sender, class Fn>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Fn&& fn) const {
     return completion_adaptor_sender<
         set_value_t, detail::remove_cvref_t<Sender>, std::decay_t<Fn>>{
@@ -150,6 +154,7 @@ struct upon_error_t {
   }
 
   template <sender Sender, class Fn>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Fn&& fn) const {
     return completion_adaptor_sender<
         set_error_t, detail::remove_cvref_t<Sender>, std::decay_t<Fn>>{
@@ -168,6 +173,7 @@ struct upon_stopped_t {
   }
 
   template <sender Sender, class Fn>
+    requires std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
   [[nodiscard]] auto operator()(Sender&& sender, Fn&& fn) const {
     return completion_adaptor_sender<
         set_stopped_t, detail::remove_cvref_t<Sender>, std::decay_t<Fn>>{

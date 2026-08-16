@@ -38,10 +38,17 @@ class let_operation;
 
 template <class Operation, class Receiver>
 class let_child_receiver {
+  // The env type depends only on Receiver, so naming it explicitly keeps
+  // get_env's return type available while Operation is still incomplete
+  // (child operation types are computed inside let_operation's own
+  // definition). A deduced decltype(auto) return would force the body —
+  // and its parent_->receiver() access — to be instantiated too early.
+  using env_type = decltype(bexec::get_env(std::declval<Receiver&>()));
+
  public:
   explicit let_child_receiver(Operation& parent) : parent_(&parent) {}
 
-  [[nodiscard]] decltype(auto) get_env() const noexcept {
+  [[nodiscard]] env_type get_env() const noexcept {
     return bexec::get_env(parent_->receiver());
   }
 
@@ -133,10 +140,14 @@ using let_child_operation_list_t =
 
 template <class Tag, class Operation, class Receiver>
 class let_receiver {
+  // See let_child_receiver: the env type must be nameable while Operation
+  // is incomplete, so it is spelled out from Receiver alone.
+  using env_type = decltype(bexec::get_env(std::declval<Receiver&>()));
+
  public:
   explicit let_receiver(Operation& parent) : parent_(&parent) {}
 
-  [[nodiscard]] decltype(auto) get_env() const noexcept {
+  [[nodiscard]] env_type get_env() const noexcept {
     return bexec::get_env(parent_->receiver());
   }
 

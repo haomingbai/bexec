@@ -11,8 +11,11 @@
 #include <bexec/just.hpp>
 #include <bexec/let.hpp>
 #include <bexec/run_loop.hpp>
+#include <bexec/sync_wait.hpp>
 #include <bexec/then.hpp>
+#include <bexec/when_all.hpp>
 #include <memory>
+#include <tuple>
 
 #include "test_support.hpp"
 
@@ -33,6 +36,36 @@ TEST(integration, let_replacement_schedules_child_work) {
   loop.run();
   EXPECT_EQ(state->signal, signal_kind::value);
   EXPECT_EQ(state->int_value, 42);
+}
+
+// Regression: a let_* factory returning an env-querying child (when_all reads
+// the receiver env for its stop token) used to instantiate
+// let_child_receiver::get_env while let_operation was still incomplete.
+TEST(integration, let_value_child_signatures_may_query_env) {
+  auto sender = bexec::let_value(bexec::just(1), [](int value) {
+    return bexec::when_all(bexec::just(value), bexec::just(value + 1));
+  });
+
+  auto result = bexec::this_thread::sync_wait(std::move(sender));
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(std::get<0>(*result), 1);
+  EXPECT_EQ(std::get<1>(*result), 2);
+}
+
+// Regression: same env query through a downstream completion-adaptor receiver
+// (let_* followed by then in a pipeline).
+TEST(integration, let_value_downstream_adaptor_receiver_env_query) {
+  auto sender = bexec::then(
+      bexec::let_value(bexec::just(20),
+                       [](int value) {
+                         return bexec::when_all(bexec::just(value + 1),
+                                                bexec::just(value * 2));
+                       }),
+      [](int plus_one, int doubled) { return plus_one + doubled; });
+
+  auto result = bexec::this_thread::sync_wait(std::move(sender));
+  ASSERT_TRUE(result.has_value());
+  EXPECT_EQ(std::get<0>(*result), 61);
 }
 
 }  // namespace bexec_tests

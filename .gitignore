@@ -10,7 +10,7 @@
 # Defines repository-level ignore rules for CMake build trees, compiled
 # objects, libraries, executables, and local test output.
 
-build/
+build*/
 CMakeFiles/
 CMakeCache.txt
 cmake_install.cmake

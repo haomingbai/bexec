@@ -68,6 +68,9 @@ class run_loop {
   [[nodiscard]] scheduler get_scheduler() noexcept;
 
   /** @brief Runs queued work until finish() is called and the queue is empty.
+   *
+   * Returns only after every in-flight enqueue()/finish() call has left the
+   * loop, so the owner may destroy the run_loop as soon as run() returns.
    */
   void run() noexcept {
     if (!begin_run()) {
@@ -82,8 +85,16 @@ class run_loop {
     }
   }
 
-  /** @brief Requests that run() return after already queued work is drained. */
+  /** @brief Requests that run() return after already queued work is drained.
+   *
+   * Contract: every enqueue() must happen-before finish() is called;
+   * delivering work concurrently with finish() races the drain and is a
+   * contract violation. finish() participates in the in-flight producer
+   * count, so run() returns only after no thread remains inside
+   * enqueue()/finish().
+   */
   void finish() noexcept {
+    producers_.fetch_add(1, std::memory_order_acq_rel);
     run_loop_state expected = run_loop_state::starting;
     if (!state_.compare_exchange_strong(expected, run_loop_state::finishing,
                                         std::memory_order_acq_rel,
@@ -93,21 +104,29 @@ class run_loop {
                                           std::memory_order_acq_rel,
                                           std::memory_order_acquire)) {
         assert(false);
+        producers_.fetch_sub(1, std::memory_order_acq_rel);
         return;
       }
     }
     wake_all_waiters();
+    producers_.fetch_sub(1, std::memory_order_acq_rel);
   }
 
  private:
   friend class detail::run_loop_schedule_sender;
 
   void enqueue(detail::run_loop_operation_base& operation) noexcept {
+    // In-flight producer checkpoint: run()'s exit path spins until this
+    // count reaches zero, so every access a producer makes to the loop
+    // stays inside the counted region.
+    producers_.fetch_add(1, std::memory_order_acq_rel);
     detail::run_loop_operation_base* head =
         head_.load(std::memory_order_acquire);
     do {
       if (head == detail::run_loop_closed_stack()) {
+        // Contract violation: delivery after finish().
         assert(false);
+        producers_.fetch_sub(1, std::memory_order_acq_rel);
         return;
       }
       operation.next = head;
@@ -116,6 +135,7 @@ class run_loop {
                                           std::memory_order_acquire));
 
     wake_one_waiter();
+    producers_.fetch_sub(1, std::memory_order_acq_rel);
   }
 
   void wake_one_waiter() noexcept {
@@ -137,9 +157,20 @@ class run_loop {
       if (detail::run_loop_operation_base* operations = try_pop_all()) {
         return reverse(operations);
       }
-      if (state_.load(std::memory_order_acquire) == run_loop_state::finishing &&
-          try_finish_empty()) {
-        return nullptr;
+      if (state_.load(std::memory_order_acquire) == run_loop_state::finishing) {
+        // finish() has been published. The caller contract guarantees every
+        // enqueue() happened-before finish(), so once the in-flight count
+        // drains to zero no new work can arrive and no producer is still
+        // touching the loop; drain the final batch, then close the stack
+        // and let run() return for safe destruction.
+        while (producers_.load(std::memory_order_acquire) != 0) {
+        }
+        if (detail::run_loop_operation_base* operations = try_pop_all()) {
+          return reverse(operations);
+        }
+        if (try_finish_empty()) {
+          return nullptr;
+        }
       }
 
       std::unique_lock lock(mutex_);
@@ -227,6 +258,10 @@ class run_loop {
   std::condition_variable cv_;
   std::atomic<detail::run_loop_operation_base*> head_{nullptr};
   std::atomic<run_loop_state> state_{run_loop_state::starting};
+  // In-flight enqueue()/finish() count. Producers increment on entry and
+  // decrement on exit; run()'s exit path spins on zero so that the loop is
+  // never destroyed while a producer is still inside one of those calls.
+  std::atomic<int> producers_{0};
 };
 
 /**

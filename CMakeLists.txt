@@ -136,6 +136,21 @@ if(BEXEC_IS_TOP_LEVEL)
     set(CPACK_RPM_PACKAGE_GROUP "Development/Libraries")
     set(CPACK_RPM_PACKAGE_RELEASE 1)
     set(CPACK_RPM_FILE_NAME RPM-DEFAULT)
+    # Do not claim ownership of directories owned by other packages
+    # (pkgconf owns the pkgconfig directory, cmake owns the cmake directory).
+    if(IS_ABSOLUTE "${CMAKE_INSTALL_LIBDIR}")
+        set(BEXEC_PACKAGE_LIBDIR "${CMAKE_INSTALL_LIBDIR}")
+    else()
+        set(
+            BEXEC_PACKAGE_LIBDIR
+            "${CPACK_PACKAGING_INSTALL_PREFIX}/${CMAKE_INSTALL_LIBDIR}"
+        )
+    endif()
+    set(
+        CPACK_RPM_EXCLUDE_FROM_AUTO_FILELIST_ADDITION
+        "${BEXEC_PACKAGE_LIBDIR}/pkgconfig"
+        "${BEXEC_PACKAGE_LIBDIR}/cmake"
+    )
 
     set(CPACK_GENERATOR "DEB;RPM")
     include(CPack)

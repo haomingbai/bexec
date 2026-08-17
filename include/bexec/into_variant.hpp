@@ -146,9 +146,8 @@ struct into_variant_closure {
 };
 
 template <sender Sender>
-  requires(
-      detail::sender_value_completion_count_v<detail::remove_cvref_t<Sender>> !=
-      0U) &&
+  requires(detail::sender_value_completion_count_v<
+               detail::remove_cvref_t<Sender>> != 0U) &&
           std::constructible_from<detail::remove_cvref_t<Sender>, Sender>
 [[nodiscard]] auto operator|(Sender&& sender, into_variant_closure closure) {
   return closure(std::forward<Sender>(sender));

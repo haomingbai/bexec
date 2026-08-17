@@ -195,11 +195,11 @@ class let_operation {
   using child_operations_type = operation_storage<child_operation_list>;
 
   template <class SenderArg, class FnArg>
-  let_operation(SenderArg&& sender, FnArg&& fn, Receiver receiver)
-      noexcept(std::is_nothrow_constructible_v<Fn, FnArg> &&
-               std::is_nothrow_move_constructible_v<Receiver> &&
-               noexcept(bexec::connect(std::declval<SenderArg>(),
-                                       std::declval<upstream_receiver_type>())))
+  let_operation(SenderArg&& sender, FnArg&& fn, Receiver receiver) noexcept(
+      std::is_nothrow_constructible_v<Fn, FnArg> &&
+      std::is_nothrow_move_constructible_v<Receiver> &&
+      noexcept(bexec::connect(std::declval<SenderArg>(),
+                              std::declval<upstream_receiver_type>())))
       : fn_(std::forward<FnArg>(fn)), receiver_(std::move(receiver)) {
     upstream_.emplace_from([this, &sender]() -> upstream_operation_type {
       return bexec::connect(std::forward<SenderArg>(sender),

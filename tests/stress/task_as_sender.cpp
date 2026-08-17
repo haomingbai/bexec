@@ -122,16 +122,16 @@ bexec::task<void> sender_parked_task() { co_await never_sender{}; }
 
 // Parent awaiting a child that is itself scheduled onto a run_loop: the
 // parent is resumed on the loop's worker thread.
-bexec::task<int> sender_parent_cross_thread(bexec::run_loop::scheduler scheduler,
-                                            int value) {
+bexec::task<int> sender_parent_cross_thread(
+    bexec::run_loop::scheduler scheduler, int value) {
   int result = co_await bexec::starts_on(scheduler, sender_indexed_task(value));
   co_return result + 1;
 }
 
 // Two-level cross-thread nesting: the middle task is resumed on the worker
 // thread and the leaf completes there as well.
-bexec::task<int> sender_middle_cross_thread(bexec::run_loop::scheduler scheduler,
-                                            int value) {
+bexec::task<int> sender_middle_cross_thread(
+    bexec::run_loop::scheduler scheduler, int value) {
   int result = co_await bexec::starts_on(scheduler, sender_indexed_task(value));
   co_return result * 2;
 }
@@ -196,7 +196,8 @@ TEST(stress, task_as_sender_destroy_suspended_await_loop) {
   for (int index = 0; index != iterations; ++index) {
     auto state = std::make_shared<shared_state>();
     {
-      auto operation = bexec::connect(sender_parked_task(), any_receiver{state});
+      auto operation =
+          bexec::connect(sender_parked_task(), any_receiver{state});
       bexec::start(operation);
       EXPECT_EQ(state->signal, signal_kind::none);
     }
@@ -209,8 +210,7 @@ TEST(stress, task_as_sender_destroy_suspended_await_loop) {
 TEST(stress, task_as_sender_nested_await_loop) {
   const int iterations = stress_iterations(20000);
   for (int index = 0; index != iterations; ++index) {
-    auto result =
-        bexec::this_thread::sync_wait(sender_nested_level2(index));
+    auto result = bexec::this_thread::sync_wait(sender_nested_level2(index));
     ASSERT_TRUE(result.has_value());
     // ((index + 1) + 1) * 2
     EXPECT_EQ(std::get<0>(*result), (index + 2) * 2);
@@ -223,7 +223,8 @@ TEST(stress, task_as_sender_error_loop) {
   const int iterations = stress_iterations(20000);
   for (int index = 0; index != iterations; ++index) {
     auto state = std::make_shared<shared_state>();
-    auto operation = bexec::connect(sender_throwing_task(), any_receiver{state});
+    auto operation =
+        bexec::connect(sender_throwing_task(), any_receiver{state});
     bexec::start(operation);
     ASSERT_EQ(state->signal, signal_kind::error);
     ASSERT_TRUE(state->exception != nullptr);
@@ -319,14 +320,15 @@ TEST(stress, task_as_sender_cross_thread_error_stopped_loop) {
         sender_parent_cross_thread_stopped(loop.get_scheduler()));
     EXPECT_FALSE(parent_stopped.has_value());
 
-    EXPECT_THROW(
-        (void)bexec::this_thread::sync_wait(
-            sender_parent_cross_thread_throwing(loop.get_scheduler())),
-        std::runtime_error);
-
-    auto on_error_sender = bexec::on(loop.get_scheduler(), sender_throwing_task());
-    EXPECT_THROW((void)bexec::this_thread::sync_wait(std::move(on_error_sender)),
+    EXPECT_THROW((void)bexec::this_thread::sync_wait(
+                     sender_parent_cross_thread_throwing(loop.get_scheduler())),
                  std::runtime_error);
+
+    auto on_error_sender =
+        bexec::on(loop.get_scheduler(), sender_throwing_task());
+    EXPECT_THROW(
+        (void)bexec::this_thread::sync_wait(std::move(on_error_sender)),
+        std::runtime_error);
 
     auto on_stopped = bexec::this_thread::sync_wait(
         bexec::on(loop.get_scheduler(), sender_stopped_task()));
@@ -371,7 +373,8 @@ TEST(stress, task_as_sender_multi_producer_starts_on) {
   std::atomic<int> completed{0};
   std::atomic<long long> sum{0};
   auto scheduler = loop.get_scheduler();
-  using sender_type = decltype(bexec::starts_on(scheduler, sender_indexed_task(0)));
+  using sender_type =
+      decltype(bexec::starts_on(scheduler, sender_indexed_task(0)));
   using operation_type = decltype(bexec::connect(
       std::declval<sender_type>(), atomic_count_receiver{&completed, &sum}));
 
@@ -428,7 +431,8 @@ TEST(stress, task_as_sender_when_all_concurrent_children) {
   for (int index = 0; index != iterations; ++index) {
     auto result = bexec::this_thread::sync_wait(bexec::when_all(
         bexec::starts_on(loop_a.get_scheduler(), sender_indexed_task(index)),
-        bexec::starts_on(loop_b.get_scheduler(), sender_indexed_task(index + 1)),
+        bexec::starts_on(loop_b.get_scheduler(),
+                         sender_indexed_task(index + 1)),
         bexec::starts_on(loop_a.get_scheduler(), sender_void_task())));
     ASSERT_TRUE(result.has_value());
     EXPECT_EQ(std::get<0>(*result), index);
@@ -487,8 +491,7 @@ TEST(stress, task_as_sender_spawn_future_scope_loop) {
                                             scope.get_token()));
     }
     for (int batch = 0; batch != 8; ++batch) {
-      auto result =
-          bexec::this_thread::sync_wait(std::move(futures[batch]));
+      auto result = bexec::this_thread::sync_wait(std::move(futures[batch]));
       ASSERT_TRUE(result.has_value());
       EXPECT_EQ(std::get<0>(*result), index + batch);
     }

@@ -136,8 +136,7 @@ concept awaitable_sender_for =
       {
         promise.unhandled_stopped()
       } -> std::convertible_to<std::coroutine_handle<>>;
-    } &&
-    requires(Sender&& sender) {
+    } && requires(Sender&& sender) {
       bexec::connect(std::forward<Sender>(sender),
                      std::declval<awaitable_connect_probe>());
     };

@@ -191,17 +191,16 @@ TEST(integration, task_as_sender_error_crosses_await_bridge) {
 static_assert(bexec::sender<bexec::task<int>>);
 static_assert(bexec::sender<bexec::task<void>>);
 static_assert(
-    std::same_as<bexec::completion_signatures_of_t<bexec::task<int>>,
-                 bexec::completion_signatures<
-                     bexec::set_value_t(int),
-                     bexec::set_error_t(std::exception_ptr),
-                     bexec::set_stopped_t()>>);
-static_assert(
-    std::same_as<bexec::completion_signatures_of_t<bexec::task<void>>,
-                 bexec::completion_signatures<
-                     bexec::set_value_t(),
-                     bexec::set_error_t(std::exception_ptr),
-                     bexec::set_stopped_t()>>);
+    std::same_as<
+        bexec::completion_signatures_of_t<bexec::task<int>>,
+        bexec::completion_signatures<bexec::set_value_t(int),
+                                     bexec::set_error_t(std::exception_ptr),
+                                     bexec::set_stopped_t()>>);
+static_assert(std::same_as<
+              bexec::completion_signatures_of_t<bexec::task<void>>,
+              bexec::completion_signatures<
+                  bexec::set_value_t(), bexec::set_error_t(std::exception_ptr),
+                  bexec::set_stopped_t()>>);
 static_assert(std::same_as<bexec::value_types_of_t<bexec::task<int>>,
                            std::variant<std::tuple<int>>>);
 static_assert(std::same_as<bexec::value_types_of_t<bexec::task<void>>,
@@ -251,13 +250,12 @@ static_assert(bexec::operation_state<task_void_operation>);
 using await_probe_promise = bexec::task<void>::promise_type;
 
 template <class Awaiter>
-concept awaiter_for_task_promise =
-    requires(Awaiter&& awaiter,
-             std::coroutine_handle<await_probe_promise> handle) {
-      { awaiter.await_ready() } -> std::convertible_to<bool>;
-      awaiter.await_suspend(handle);
-      awaiter.await_resume();
-    };
+concept awaiter_for_task_promise = requires(
+    Awaiter&& awaiter, std::coroutine_handle<await_probe_promise> handle) {
+  { awaiter.await_ready() } -> std::convertible_to<bool>;
+  awaiter.await_suspend(handle);
+  awaiter.await_resume();
+};
 
 template <class Value>
 concept co_awaitable_in_task =
@@ -283,8 +281,7 @@ TEST(integration, task_flows_through_then) {
 }
 
 TEST(integration, task_error_flows_through_then) {
-  auto sender =
-      bexec::then(throwing_child(), [](int value) { return value; });
+  auto sender = bexec::then(throwing_child(), [](int value) { return value; });
   EXPECT_THROW((void)bexec::this_thread::sync_wait(std::move(sender)),
                std::runtime_error);
 }
@@ -461,9 +458,8 @@ static_assert(let_value_accepts_task<bexec::task<int>>);
 static_assert(!let_value_accepts_task<bexec::task<int>&>);
 
 template <class Task>
-concept into_variant_accepts_task = requires(Task&& task) {
-  bexec::into_variant(std::forward<Task>(task));
-};
+concept into_variant_accepts_task =
+    requires(Task&& task) { bexec::into_variant(std::forward<Task>(task)); };
 static_assert(into_variant_accepts_task<bexec::task<int>>);
 static_assert(!into_variant_accepts_task<bexec::task<int>&>);
 
@@ -545,8 +541,7 @@ static_assert(!associate_accepts_task<bexec::task<int>&>);
 // repeat_until produces each child from the factory as a prvalue, so a
 // task-returning factory is accepted.
 static_assert(requires {
-  bexec::repeat_until([] { return bexec::task<int>{}; },
-                      [] { return true; });
+  bexec::repeat_until([] { return bexec::task<int>{}; }, [] { return true; });
 });
 
 // The adapted senders stay connectable to a generic receiver: this
@@ -556,34 +551,29 @@ static_assert(
     bexec::sender_to<decltype(bexec::then(std::declval<bexec::task<int>>(),
                                           [](int) {})),
                      any_receiver>);
-static_assert(
-    bexec::sender_to<decltype(bexec::let_value(
-                         std::declval<bexec::task<int>>(),
-                         [](int) { return bexec::just(0); })),
-                     any_receiver>);
-static_assert(
-    bexec::sender_to<decltype(bexec::into_variant(
-                         std::declval<bexec::task<int>>())),
-                     any_receiver>);
-static_assert(
-    bexec::sender_to<decltype(bexec::when_all(
-                         std::declval<bexec::task<int>>(),
-                         std::declval<bexec::task<void>>())),
-                     any_receiver>);
+static_assert(bexec::sender_to<
+              decltype(bexec::let_value(std::declval<bexec::task<int>>(),
+                                        [](int) { return bexec::just(0); })),
+              any_receiver>);
+static_assert(bexec::sender_to<
+              decltype(bexec::into_variant(std::declval<bexec::task<int>>())),
+              any_receiver>);
+static_assert(bexec::sender_to<
+              decltype(bexec::when_all(std::declval<bexec::task<int>>(),
+                                       std::declval<bexec::task<void>>())),
+              any_receiver>);
 
 // A task child carries its own set_error(std::exception_ptr) signature, so
 // when_all's extracted error set keeps exception_ptr regardless of the
 // noexcept extraction, and the child-connect guard (when_all.hpp:129-156)
 // is never on the rejecting path.
-static_assert(std::same_as<
-              bexec::error_types_of_t<decltype(bexec::when_all(
-                  std::declval<bexec::task<int>>(),
-                  std::declval<bexec::task<int>>()))>,
-              std::variant<std::exception_ptr>>);
-static_assert(std::same_as<
-              bexec::value_types_of_t<decltype(bexec::when_all(
-                  std::declval<bexec::task<int>>(),
-                  std::declval<bexec::task<int>>()))>,
-              std::variant<std::tuple<int, int>>>);
+static_assert(std::same_as<bexec::error_types_of_t<decltype(bexec::when_all(
+                               std::declval<bexec::task<int>>(),
+                               std::declval<bexec::task<int>>()))>,
+                           std::variant<std::exception_ptr>>);
+static_assert(std::same_as<bexec::value_types_of_t<decltype(bexec::when_all(
+                               std::declval<bexec::task<int>>(),
+                               std::declval<bexec::task<int>>()))>,
+                           std::variant<std::tuple<int, int>>>);
 
 }  // namespace bexec_tests

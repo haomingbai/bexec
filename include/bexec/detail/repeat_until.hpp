@@ -97,11 +97,12 @@ class repeat_until_operation {
                             set_error_t(std::exception_ptr)>>>>;
   using stored_completion = completion_variant_t<stored_completion_signatures>;
 
-  repeat_until_operation(Factory factory, Predicate predicate,
-                         Receiver receiver)
-      noexcept(std::is_nothrow_move_constructible_v<Factory> &&
-               std::is_nothrow_move_constructible_v<Predicate> &&
-               std::is_nothrow_move_constructible_v<Receiver>)
+  repeat_until_operation(
+      Factory factory, Predicate predicate,
+      Receiver
+          receiver) noexcept(std::is_nothrow_move_constructible_v<Factory> &&
+                             std::is_nothrow_move_constructible_v<Predicate> &&
+                             std::is_nothrow_move_constructible_v<Receiver>)
       : factory_(std::move(factory)),
         predicate_(std::move(predicate)),
         receiver_(std::move(receiver)) {}

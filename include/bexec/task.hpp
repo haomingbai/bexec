@@ -71,8 +71,8 @@ class task_operation {
       std::is_nothrow_move_constructible_v<Receiver>)
       : receiver_(std::move(receiver)),
         handle_(std::exchange(task_handle, {})) {
-    handle_.promise().register_connected_operation(
-        this, &task_operation::deliver);
+    handle_.promise().register_connected_operation(this,
+                                                   &task_operation::deliver);
   }
 
   task_operation(const task_operation&) = delete;
@@ -284,8 +284,7 @@ class task {
   connect(Receiver&& receiver) && noexcept(
       std::is_nothrow_move_constructible_v<std::remove_cvref_t<Receiver>>) {
     assert(handle_ && "connect requires a task that still owns its frame");
-    return detail::task_operation<promise_type,
-                                  std::remove_cvref_t<Receiver>>{
+    return detail::task_operation<promise_type, std::remove_cvref_t<Receiver>>{
         handle_, std::forward<Receiver>(receiver)};
   }
 
@@ -424,8 +423,7 @@ class task<void> {
   connect(Receiver&& receiver) && noexcept(
       std::is_nothrow_move_constructible_v<std::remove_cvref_t<Receiver>>) {
     assert(handle_ && "connect requires a task that still owns its frame");
-    return detail::task_operation<promise_type,
-                                  std::remove_cvref_t<Receiver>>{
+    return detail::task_operation<promise_type, std::remove_cvref_t<Receiver>>{
         handle_, std::forward<Receiver>(receiver)};
   }
 

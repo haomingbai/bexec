@@ -166,10 +166,9 @@ concept sync_wait_connectable = requires(
     Sender&& sender,
     sync_wait_state<sync_wait_value_tuple_t<Sender>,
                     sync_wait_error_variant_t<Sender>>& state) {
-  bexec::connect(
-      std::forward<Sender>(sender),
-      sync_wait_receiver<sync_wait_value_tuple_t<Sender>,
-                         sync_wait_error_variant_t<Sender>>{state});
+  bexec::connect(std::forward<Sender>(sender),
+                 sync_wait_receiver<sync_wait_value_tuple_t<Sender>,
+                                    sync_wait_error_variant_t<Sender>>{state});
 };
 
 }  // namespace detail

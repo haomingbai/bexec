@@ -132,7 +132,7 @@ include(FetchContent)
 FetchContent_Declare(
     bexec
     GIT_REPOSITORY https://github.com/haomingbai/bexec.git
-    GIT_TAG v0.0.1
+    GIT_TAG v0.1.0
 )
 FetchContent_MakeAvailable(bexec)
 target_link_libraries(your_target PRIVATE bexec::bexec)

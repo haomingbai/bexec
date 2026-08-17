@@ -360,13 +360,21 @@ inline constexpr bool spawnable_sender_v =
     sender<Sender> && spawn_completion_signatures_ok<
                           bexec::completion_signatures_of_t<Sender>>::value;
 
-template <class Operation>
+template <class Operation, class Env>
 class spawn_receiver {
  public:
+  // The env type is just spawn_operation's Env template parameter; naming it
+  // explicitly keeps get_env's return type available while spawn_operation
+  // is still incomplete (child_operation_type is computed inside its own
+  // definition). A deduced auto return would force the body — and its
+  // operation_->env() access — to be instantiated too early.
+  using env_type = Env;
+
   explicit spawn_receiver(Operation& operation) noexcept
       : operation_(&operation) {}
 
-  [[nodiscard]] auto get_env() const noexcept(noexcept(operation_->env())) {
+  [[nodiscard]] env_type get_env() const
+      noexcept(std::is_nothrow_copy_constructible_v<Env>) {
     return operation_->env();
   }
 
@@ -390,7 +398,7 @@ template <class Sender, class Token, class Env, class ByteAllocator>
 class spawn_operation {
  public:
   using operation_type = spawn_operation;
-  using receiver_type = spawn_receiver<operation_type>;
+  using receiver_type = spawn_receiver<operation_type, Env>;
   using child_operation_type = decltype(bexec::connect(
       std::declval<Sender>(), std::declval<receiver_type>()));
   using byte_allocator_type = ByteAllocator;

@@ -65,14 +65,16 @@ template <class Scheduler, class Sender>
 using starts_on_completion_signatures_t =
     typename starts_on_completion_signatures<Scheduler, Sender>::type;
 
-template <class Operation>
+template <class Operation, class Receiver>
 class starts_on_schedule_receiver {
  public:
+  using env_type = decltype(bexec::get_env(std::declval<Receiver&>()));
+
   explicit starts_on_schedule_receiver(Operation& operation)
       : operation_(&operation) {}
 
-  [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(operation_->receiver()))) {
+  [[nodiscard]] env_type get_env() const
+      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>()))) {
     return bexec::get_env(operation_->receiver());
   }
 
@@ -89,15 +91,18 @@ class starts_on_schedule_receiver {
   Operation* operation_;
 };
 
-template <class Operation>
+template <class Operation, class Receiver, class Scheduler>
 class starts_on_child_receiver {
  public:
+  using env_type = bexec::env_with_scheduler<
+      Scheduler, decltype(bexec::get_env(std::declval<Receiver&>()))>;
+
   explicit starts_on_child_receiver(Operation& operation)
       : operation_(&operation) {}
 
-  [[nodiscard]] auto get_env() const noexcept {
-    return env_with_scheduler{operation_->scheduler(),
-                              bexec::get_env(operation_->receiver())};
+  [[nodiscard]] env_type get_env() const noexcept {
+    return env_type{operation_->scheduler(),
+                    bexec::get_env(operation_->receiver())};
   }
 
   template <class... Args>
@@ -138,14 +143,17 @@ template <class Scheduler, class Sender>
 using on_completion_signatures_t =
     typename on_completion_signatures<Scheduler, Sender>::type;
 
-template <class Operation>
+template <class Operation, class Receiver, class Scheduler>
 class on_child_receiver {
  public:
+  using env_type = bexec::env_with_scheduler<
+      Scheduler, decltype(bexec::get_env(std::declval<Receiver&>()))>;
+
   explicit on_child_receiver(Operation& operation) : operation_(&operation) {}
 
-  [[nodiscard]] auto get_env() const noexcept {
-    return env_with_scheduler{operation_->target_scheduler(),
-                              bexec::get_env(operation_->receiver())};
+  [[nodiscard]] env_type get_env() const noexcept {
+    return env_type{operation_->target_scheduler(),
+                    bexec::get_env(operation_->receiver())};
   }
 
   template <class... Args>
@@ -164,13 +172,15 @@ class on_child_receiver {
   Operation* operation_;
 };
 
-template <class Operation>
+template <class Operation, class Receiver>
 class on_final_receiver {
  public:
+  using env_type = decltype(bexec::get_env(std::declval<Receiver&>()));
+
   explicit on_final_receiver(Operation& operation) : operation_(&operation) {}
 
-  [[nodiscard]] auto get_env() const
-      noexcept(noexcept(bexec::get_env(operation_->receiver()))) {
+  [[nodiscard]] env_type get_env() const
+      noexcept(noexcept(bexec::get_env(std::declval<Receiver&>()))) {
     return bexec::get_env(operation_->receiver());
   }
 
@@ -211,12 +221,12 @@ class starts_on_sender {
     using operation_type = operation;
     using schedule_sender_type = detail::schedule_sender_for_t<Scheduler>;
     using schedule_receiver_type =
-        detail::starts_on_schedule_receiver<operation_type>;
+        detail::starts_on_schedule_receiver<operation_type, Receiver>;
     using schedule_operation_type =
         decltype(bexec::connect(std::declval<schedule_sender_type>(),
                                 std::declval<schedule_receiver_type>()));
     using child_receiver_type =
-        detail::starts_on_child_receiver<operation_type>;
+        detail::starts_on_child_receiver<operation_type, Receiver, Scheduler>;
     using child_operation_type = decltype(bexec::connect(
         std::declval<Sender>(), std::declval<child_receiver_type>()));
 
@@ -331,13 +341,15 @@ class on_sender {
     using operation_type = operation;
     using final_scheduler_type = detail::receiver_scheduler_t<Receiver>;
     using source_sender_type = starts_on_sender<Scheduler, Sender>;
-    using source_receiver_type = detail::on_child_receiver<operation_type>;
+    using source_receiver_type =
+        detail::on_child_receiver<operation_type, Receiver, Scheduler>;
     using source_operation_type =
         decltype(bexec::connect(std::declval<source_sender_type>(),
                                 std::declval<source_receiver_type>()));
     using final_schedule_sender_type =
         detail::schedule_sender_for_t<final_scheduler_type>;
-    using final_receiver_type = detail::on_final_receiver<operation_type>;
+    using final_receiver_type =
+        detail::on_final_receiver<operation_type, Receiver>;
     using final_operation_type =
         decltype(bexec::connect(std::declval<final_schedule_sender_type>(),
                                 std::declval<final_receiver_type>()));

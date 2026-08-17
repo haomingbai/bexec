@@ -184,9 +184,16 @@ class sender_awaitable {
 
   class receiver {
    public:
+    // The env type depends only on Promise; naming it explicitly keeps
+    // get_env's return type available while sender_awaitable is still
+    // incomplete (the child operation is constructed as a direct member).
+    // A deduced decltype(auto) return would force the body — and its
+    // owner_->promise_ access — to be instantiated too early.
+    using env_type = detail::sender_awaitable_env_t<Sender, Promise>;
+
     explicit receiver(sender_awaitable& owner) noexcept : owner_(&owner) {}
 
-    [[nodiscard]] decltype(auto) get_env() const noexcept {
+    [[nodiscard]] env_type get_env() const noexcept {
       return bexec::get_env(*owner_->promise_);
     }
 

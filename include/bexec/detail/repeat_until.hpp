@@ -44,11 +44,17 @@ template <class Factory, class Predicate, class Receiver>
 class repeat_until_child_receiver {
  public:
   using parent_type = repeat_until_operation<Factory, Predicate, Receiver>;
+  // The env type depends only on Receiver, so naming it explicitly keeps
+  // get_env's return type available while repeat_until_operation is still
+  // incomplete (child_operation_type is computed inside its own definition).
+  // A deduced auto return would force the body — and its
+  // parent_->receiver() access — to be instantiated too early.
+  using env_type = decltype(bexec::get_env(std::declval<Receiver&>()));
 
   repeat_until_child_receiver(parent_type& parent, std::uint64_t epoch)
       : parent_(&parent), child_epoch_(epoch) {}
 
-  [[nodiscard]] auto get_env() const noexcept {
+  [[nodiscard]] env_type get_env() const noexcept {
     return bexec::get_env(parent_->receiver());
   }
 

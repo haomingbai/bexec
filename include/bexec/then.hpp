@@ -89,7 +89,14 @@ class completion_adaptor_sender {
         fn_(std::forward<FnArg>(fn)) {}
 
   template <class Receiver>
-  auto connect(Receiver receiver) && {
+  auto connect(Receiver receiver) && noexcept(
+      std::is_nothrow_move_constructible_v<Sender> &&
+      std::is_nothrow_move_constructible_v<Fn> &&
+      std::is_nothrow_move_constructible_v<Receiver> &&
+      noexcept(bexec::connect(
+          std::declval<Sender>(),
+          std::declval<
+              detail::completion_adaptor_receiver<Tag, Receiver, Fn>>()))) {
     using wrapped_type = detail::completion_adaptor_receiver<Tag, Receiver, Fn>;
     using operation_type = decltype(bexec::connect(
         std::declval<Sender>(), std::declval<wrapped_type>()));
@@ -104,7 +111,14 @@ class completion_adaptor_sender {
 
   template <class Receiver>
     requires std::copy_constructible<Sender> && std::copy_constructible<Fn>
-  auto connect(Receiver receiver) const& {
+  auto connect(Receiver receiver) const& noexcept(
+      std::is_nothrow_copy_constructible_v<Sender> &&
+      std::is_nothrow_copy_constructible_v<Fn> &&
+      std::is_nothrow_move_constructible_v<Receiver> &&
+      noexcept(bexec::connect(
+          std::declval<const Sender&>(),
+          std::declval<
+              detail::completion_adaptor_receiver<Tag, Receiver, Fn>>()))) {
     using wrapped_type = detail::completion_adaptor_receiver<Tag, Receiver, Fn>;
     using operation_type = decltype(bexec::connect(
         std::declval<const Sender&>(), std::declval<wrapped_type>()));

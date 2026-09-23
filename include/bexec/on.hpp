@@ -94,8 +94,9 @@ class starts_on_schedule_receiver {
 template <class Operation, class Receiver, class Scheduler>
 class starts_on_child_receiver {
  public:
-  using env_type = bexec::env_with_scheduler<
-      Scheduler, decltype(bexec::get_env(std::declval<Receiver&>()))>;
+  using env_type =
+      bexec::env_with_scheduler<Scheduler, decltype(bexec::get_env(
+                                               std::declval<Receiver&>()))>;
 
   explicit starts_on_child_receiver(Operation& operation)
       : operation_(&operation) {}
@@ -146,8 +147,9 @@ using on_completion_signatures_t =
 template <class Operation, class Receiver, class Scheduler>
 class on_child_receiver {
  public:
-  using env_type = bexec::env_with_scheduler<
-      Scheduler, decltype(bexec::get_env(std::declval<Receiver&>()))>;
+  using env_type =
+      bexec::env_with_scheduler<Scheduler, decltype(bexec::get_env(
+                                               std::declval<Receiver&>()))>;
 
   explicit on_child_receiver(Operation& operation) : operation_(&operation) {}
 

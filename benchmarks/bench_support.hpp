@@ -21,6 +21,13 @@
  * scheduler), the closest stdexec facility is used and the difference is
  * noted next to the case.
  *
+ * Measurement philosophy: neither flavor inserts compiler barriers inside the
+ * hot loop. Both libraries are measured under the same conditions and are
+ * free to fold sender pipelines into straight-line code — that is the
+ * zero-overhead abstraction both aspire to. Only the accumulated sink is
+ * anchored after the loop with do_not_optimize so the work cannot be deleted
+ * entirely.
+ *
  * Modes:
  * - Full mode (default): each case is calibrated so one measured call takes
  *   at least --min-time-ms, then measured --rounds times; the best (lowest)
@@ -156,7 +163,7 @@ inline int run(const registry& reg, int argc, char** argv, const char* suite) {
       opts.filter = std::string(arg.substr(std::strlen("--filter=")));
     } else if (arg.rfind("--min-time-ms=", 0) == 0) {
       opts.full_time_ns =
-          static_cast<std::uint64_t>(std::strtoull(argv[i] + 13, nullptr, 10)) *
+          static_cast<std::uint64_t>(std::strtoull(argv[i] + 14, nullptr, 10)) *
           1'000'000ULL;
     } else if (arg.rfind("--rounds=", 0) == 0) {
       opts.full_rounds =

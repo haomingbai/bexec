@@ -140,14 +140,21 @@ class run_loop {
 
   void wake_one_waiter() noexcept {
     // Queue/state publication is atomic. The mutex only serializes with
-    // wait() entering sleep after a false predicate check.
+    // wait() entering sleep after a false predicate check. When no waiter is
+    // parked (waiting_ == 0), notifying cannot wake anyone, so the lock and
+    // the syscall-free notify are skipped entirely; see pop_all_blocking()
+    // for why a waiter can never sleep unseen by waiting_.
+    if (waiting_.load(std::memory_order_acquire) == 0) {
+      return;
+    }
     std::lock_guard lock(mutex_);
     cv_.notify_one();
   }
 
   void wake_all_waiters() noexcept {
-    // Queue/state publication is atomic. The mutex only serializes with
-    // wait() entering sleep after a false predicate check.
+    if (waiting_.load(std::memory_order_acquire) == 0) {
+      return;
+    }
     std::lock_guard lock(mutex_);
     cv_.notify_all();
   }
@@ -174,10 +181,18 @@ class run_loop {
       }
 
       std::unique_lock lock(mutex_);
+      // Register as parked before the predicate check so no producer can
+      // decide to skip a notification for a waiter that is about to sleep.
+      // If a producer skips the notify because it observed waiting_ == 0, its
+      // enqueue CAS (release) already happened-before this predicate check
+      // (acquire), which then observes the queued work and keeps the waiter
+      // out of wait(). If the producer observes waiting_ != 0, it notifies.
+      waiting_.fetch_add(1, std::memory_order_acq_rel);
       cv_.wait(lock, [this] {
         return has_work() || state_.load(std::memory_order_acquire) ==
                                  run_loop_state::finishing;
       });
+      waiting_.fetch_sub(1, std::memory_order_release);
     }
   }
 
@@ -256,6 +271,11 @@ class run_loop {
 
   std::mutex mutex_;
   std::condition_variable cv_;
+  // Number of waiters currently parked in (or about to enter) cv_.wait().
+  // Producers consult it to skip the mutex+notify pair when nobody can be
+  // woken; the waiter-side fetch_add happens inside the mutex before the
+  // predicate check, which closes the lost-wakeup window.
+  std::atomic<int> waiting_{0};
   std::atomic<detail::run_loop_operation_base*> head_{nullptr};
   std::atomic<run_loop_state> state_{run_loop_state::starting};
   // In-flight enqueue()/finish() count. Producers increment on entry and

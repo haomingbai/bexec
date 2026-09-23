@@ -59,7 +59,10 @@ struct stop_callback_record {
 
 struct stop_state {
   mutable std::mutex mutex;
-  bool requested{false};
+  // Atomic so the hot read path (stop_requested) needs no lock. The mutex
+  // guards only the callback list; see request_stop() for the ordering
+  // between the atomic flag and the list.
+  std::atomic_bool requested{false};
   std::thread::id requester_thread{};
   stop_callback_record* head{nullptr};
 
@@ -175,12 +178,8 @@ class inplace_stop_token {
 
   /** @brief Returns true once the associated source has requested stop. */
   [[nodiscard]] bool stop_requested() const noexcept {
-    if (state_ == nullptr) {
-      return false;
-    }
-
-    std::lock_guard lock(state_->mutex);
-    return state_->requested;
+    return state_ != nullptr &&
+           state_->requested.load(std::memory_order_acquire);
   }
 
  private:
@@ -225,8 +224,7 @@ class inplace_stop_source {
 
   /** @brief Returns whether stop has already been requested. */
   [[nodiscard]] bool stop_requested() const noexcept {
-    std::lock_guard lock(state_.mutex);
-    return state_.requested;
+    return state_.requested.load(std::memory_order_acquire);
   }
 
   /**
@@ -235,13 +233,16 @@ class inplace_stop_source {
    * requested.
    */
   bool request_stop() noexcept {
-    std::unique_lock lock(state_.mutex);
-    if (state_.requested) {
+    // Claim the request first: the exchange releases the flag so token reads
+    // synchronize with it. Registrars that read the flag as false inside the
+    // mutex then push before unlocking, and this thread re-reads the list
+    // under the same mutex afterwards, so no registration is missed.
+    if (state_.requested.exchange(true, std::memory_order_acq_rel)) {
       return false;
     }
-    state_.requested = true;
     state_.requester_thread = std::this_thread::get_id();
 
+    std::unique_lock lock(state_.mutex);
     while (state_.head != nullptr) {
       detail::stop_callback_record* record = state_.head;
       bool destroyed = false;
@@ -280,7 +281,7 @@ inplace_stop_callback<Callback>::inplace_stop_callback(
   bool fire_now = false;
   {
     std::lock_guard lock(state->mutex);
-    if (state->requested) {
+    if (state->requested.load(std::memory_order_acquire)) {
       fire_now = true;
     } else {
       state->push(record_);

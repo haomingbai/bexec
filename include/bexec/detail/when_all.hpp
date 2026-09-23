@@ -210,18 +210,13 @@ struct when_all_state {
     }
   }
 
+  // Called only from start() before any child has been started, so there is
+  // no concurrent completion and no synchronization is required.
   void start_error(std::exception_ptr error_value) noexcept {
-    std::optional<Receiver> receiver_to_complete;
-    {
-      std::lock_guard lock(mutex);
-      if (completed) {
-        return;
-      }
-      completed = true;
-      remaining = 0;
-      receiver_to_complete.emplace(std::move(receiver));
-    }
+    terminal.store(terminal_kind::error, std::memory_order_relaxed);
+    remaining.store(0, std::memory_order_relaxed);
 
+    std::optional<Receiver> receiver_to_complete(std::move(receiver));
     bexec::set_error(std::move(*receiver_to_complete), std::move(error_value));
   }
 
@@ -230,107 +225,76 @@ struct when_all_state {
     auto& slot = std::get<Index>(values);
     using value_type = std::remove_reference_t<decltype(slot)>::value_type;
     if constexpr (std::is_nothrow_constructible_v<value_type, Args...>) {
-      {
-        std::lock_guard lock(mutex);
-        slot.emplace(std::forward<Args>(args)...);
-      }
+      slot.emplace(std::forward<Args>(args)...);
     } else {
       try {
-        {
-          std::lock_guard lock(mutex);
-          slot.emplace(std::forward<Args>(args)...);
-        }
+        slot.emplace(std::forward<Args>(args)...);
       } catch (...) {
         child_error(std::current_exception());
         return;
       }
     }
-    finish_one();
+    // Each value slot has a single writer: the child that owns it. The
+    // finishing thread synchronizes with every child through the acquire
+    // half of this fetch_sub, so no lock is needed on either side.
+    if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      finish_one();
+    }
   }
 
   template <class Error>
   void child_error(Error&& error_value) noexcept {
-    bool request_stop = false;
-    {
-      std::lock_guard lock(mutex);
-      if (terminal == terminal_kind::none) {
-        terminal = terminal_kind::error;
-        if constexpr (std::is_nothrow_constructible_v<std::decay_t<Error>,
-                                                      Error>) {
+    terminal_kind expected = terminal_kind::none;
+    if (terminal.compare_exchange_strong(expected, terminal_kind::error,
+                                         std::memory_order_acq_rel,
+                                         std::memory_order_acquire)) {
+      // The CAS winner is the only writer of error; the finishing thread
+      // reads it after the acquire on remaining.
+      if constexpr (std::is_nothrow_constructible_v<std::decay_t<Error>,
+                                                    Error>) {
+        store_error(std::forward<Error>(error_value));
+      } else {
+        try {
           store_error(std::forward<Error>(error_value));
-        } else {
-          try {
-            store_error(std::forward<Error>(error_value));
-          } catch (...) {
-            error.emplace(std::in_place_type<std::exception_ptr>,
-                          std::current_exception());
-          }
+        } catch (...) {
+          error.emplace(std::in_place_type<std::exception_ptr>,
+                        std::current_exception());
         }
-        request_stop = true;
       }
-    }
-    if (request_stop) {
       stop_source.request_stop();
     }
-    finish_one();
+    if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      finish_one();
+    }
   }
 
   void child_stopped() noexcept {
-    bool request_stop = false;
-    {
-      std::lock_guard lock(mutex);
-      if (terminal == terminal_kind::none) {
-        terminal = terminal_kind::stopped;
-        request_stop = true;
-      }
-    }
-    if (request_stop) {
+    terminal_kind expected = terminal_kind::none;
+    if (terminal.compare_exchange_strong(expected, terminal_kind::stopped,
+                                         std::memory_order_acq_rel,
+                                         std::memory_order_acquire)) {
       stop_source.request_stop();
     }
-    finish_one();
+    if (remaining.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+      finish_one();
+    }
   }
 
   void finish_one() noexcept {
-    std::optional<ErrorVariant> error_to_deliver;
-    std::optional<Receiver> receiver_to_complete;
-    std::optional<ValuesTuple> values_to_deliver;
-    terminal_kind final_terminal = terminal_kind::none;
-
-    {
-      std::lock_guard lock(mutex);
-      if (remaining == 0) {
-        return;
-      }
-      --remaining;
-      if (remaining != 0 || completed) {
-        return;
-      }
-
-      completed = true;
-      final_terminal = terminal;
-      if (error) {
-        error_to_deliver.emplace(std::move(*error));
-      }
-      if constexpr (SendsValue) {
-        if (final_terminal == terminal_kind::none) {
-          values_to_deliver.emplace(std::move(values));
-        }
-      }
-      on_stop.reset();
-      receiver_to_complete.emplace(std::move(receiver));
-    }
-
+    // Only the thread whose fetch_sub brought remaining to zero gets here;
+    // receiver, error, values, and on_stop are consumed exclusively by it.
+    on_stop.reset();
+    terminal_kind final_terminal = terminal.load(std::memory_order_acquire);
     if (final_terminal == terminal_kind::error) {
-      deliver_error(std::move(*receiver_to_complete),
-                    std::move(*error_to_deliver));
+      std::optional<ErrorVariant> error_to_deliver(std::move(error));
+      deliver_error(std::move(receiver), std::move(*error_to_deliver));
     } else if (final_terminal == terminal_kind::stopped) {
-      bexec::set_stopped(std::move(*receiver_to_complete));
+      bexec::set_stopped(std::move(receiver));
     } else {
       if constexpr (SendsValue) {
-        deliver_success(std::move(*receiver_to_complete),
-                        std::move(*values_to_deliver));
+        deliver_success(std::move(receiver), std::move(values));
       } else {
-        bexec::set_value(std::move(*receiver_to_complete));
+        bexec::set_value(std::move(receiver));
       }
     }
   }
@@ -396,14 +360,16 @@ struct when_all_state {
   enum class terminal_kind { none, error, stopped };
 
   Receiver receiver;
-  std::size_t remaining;
-  std::mutex mutex;
+  // Completion counter; the thread that brings it to zero performs the
+  // terminal completion and is the only consumer of receiver/values/error.
+  std::atomic<std::size_t> remaining;
   inplace_stop_source stop_source;
   manual_lifetime<on_stop_callback_type> on_stop;
-  terminal_kind terminal{terminal_kind::none};
+  // Arbitration between a first error/stopped completion and the success
+  // path; the CAS winner owns the error slot write.
+  std::atomic<terminal_kind> terminal{terminal_kind::none};
   std::optional<ErrorVariant> error;
   ValuesTuple values;
-  bool completed{false};
 };
 
 template <std::size_t Index, class State>

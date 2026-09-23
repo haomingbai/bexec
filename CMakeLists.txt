@@ -43,6 +43,7 @@ target_include_directories(
 
 option(BEXEC_BUILD_TESTS "Build bexec tests" ${BEXEC_IS_TOP_LEVEL})
 option(BEXEC_BUILD_EXAMPLES "Build bexec examples" ${BEXEC_IS_TOP_LEVEL})
+option(BEXEC_BUILD_BENCHMARKS "Build bexec benchmarks" ${BEXEC_IS_TOP_LEVEL})
 
 if(BEXEC_BUILD_TESTS)
     enable_testing()
@@ -51,6 +52,10 @@ endif()
 
 if(BEXEC_BUILD_EXAMPLES)
     add_subdirectory(examples)
+endif()
+
+if(BEXEC_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
 
 set(

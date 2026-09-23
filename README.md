@@ -105,6 +105,39 @@ The project builds tests and examples by default. Disable them with:
 cmake -S . -B build -DBEXEC_BUILD_TESTS=OFF -DBEXEC_BUILD_EXAMPLES=OFF
 ```
 
+## Benchmarks
+
+Benchmarks live under `benchmarks/`, one executable per feature. Every case
+comes in two flavors running the same logic — `.bexec` against this library
+and `.stdexec` against the [stdexec](https://github.com/NVIDIA/stdexec)
+reference implementation — so per-feature overheads can be compared side by
+side. stdexec is fetched with FetchContent and is only downloaded when the
+benchmarks are built.
+
+```sh
+# Configure with benchmarks enabled (on by default for a top-level build).
+cmake -S . -B build
+
+# Build every benchmark executable.
+cmake --build build --target bexec_benchmarks
+
+# Full timings; run from a Release build for meaningful numbers.
+./build/benchmarks/bexec_bench_just
+
+# All executables at once.
+cmake --build build --target bexec_benchmarks && \
+  ctest --test-dir build -L benchmark --output-on-failure
+```
+
+CTest registers each executable once in smoke mode (`--smoke` bounds the
+per-case work, so the run only proves the benchmarks still execute). Useful
+options accepted by every benchmark executable: `--filter=substr`,
+`--min-time-ms=N`, `--rounds=N`, `--list`.
+
+Where stdexec lacks a directly equivalent facility, the closest stdexec
+mechanism is used and the difference is noted in the benchmark source
+(`benchmarks/*.cpp`).
+
 ## Use as a Dependency
 
 The exported target is always `bexec::bexec`. To use an installed copy with

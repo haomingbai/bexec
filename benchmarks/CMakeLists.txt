@@ -54,18 +54,6 @@ function(bexec_add_feature_benchmark feature)
             STDEXEC::stdexec
     )
     target_include_directories("${target}" PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}")
-    # Benchmarks are only meaningful optimized; leave Debug untouched.
-    if(MSVC)
-        target_compile_options(
-            "${target}"
-            PRIVATE $<$<NOT:$<CONFIG:Debug>>:/O2>
-        )
-    else()
-        target_compile_options(
-            "${target}"
-            PRIVATE $<$<NOT:$<CONFIG:Debug>>:-O2 -g>
-        )
-    endif()
     list(APPEND BEXEC_BENCH_TARGETS "${target}")
     set(BEXEC_BENCH_TARGETS "${BEXEC_BENCH_TARGETS}" PARENT_SCOPE)
 

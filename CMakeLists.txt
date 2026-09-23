@@ -43,7 +43,9 @@ target_include_directories(
 
 option(BEXEC_BUILD_TESTS "Build bexec tests" ${BEXEC_IS_TOP_LEVEL})
 option(BEXEC_BUILD_EXAMPLES "Build bexec examples" ${BEXEC_IS_TOP_LEVEL})
-option(BEXEC_BUILD_BENCHMARKS "Build bexec benchmarks" ${BEXEC_IS_TOP_LEVEL})
+# Benchmarks are opt-in: they pull in stdexec via FetchContent and are not
+# part of the default build or the default CTest run.
+option(BEXEC_BUILD_BENCHMARKS "Build bexec benchmarks" OFF)
 
 if(BEXEC_BUILD_TESTS)
     enable_testing()

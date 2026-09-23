@@ -12,7 +12,7 @@
 # and against the stdexec reference implementation for comparison.
 #
 # stdexec is fetched with FetchContent below, which only executes when the
-# bexec benchmarks are built (BEXEC_BUILD_BENCHMARKS=ON).
+# bexec benchmarks are built (BEXEC_BUILD_BENCHMARKS=ON, disabled by default).
 #
 # Each executable is registered with CTest in smoke mode (--smoke bounds the
 # per-case work so the run only proves the benchmarks still execute). The full

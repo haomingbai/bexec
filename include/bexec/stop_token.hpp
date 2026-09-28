@@ -12,6 +12,12 @@
  * inplace_stop_callback for cooperative cancellation in schedulers and
  * algorithms. Callback registrations are stored intrusively in the callback
  * object; registering a callback does not allocate.
+ *
+ * The callback list is guarded by a spinlock fused into the same atomic word
+ * as the stop flag (bit 0: stop requested, bit 1: lock held), so the hot read
+ * stop_requested() stays a single lock-free acquire load and no mutex or
+ * futex exists anywhere on the stop-token path. Callbacks execute with the
+ * lock open. See docs/stop-token.md for the full protocol specification.
  */
 
 #pragma once
@@ -22,7 +28,7 @@
 #include <atomic>
 #include <bexec/detail/type_traits.hpp>
 #include <concepts>
-#include <mutex>
+#include <cstdint>
 #include <thread>
 #include <type_traits>
 #include <utility>
@@ -49,47 +55,150 @@ namespace detail {
 struct stop_state;
 
 struct stop_callback_record {
+  // List linkage: plain fields, guarded by the stop-state spinlock.
+  // prev_ptr is the address of the slot pointing at this record; nullptr
+  // marks a record that is no longer in the list.
   stop_callback_record* next{nullptr};
-  stop_callback_record* prev{nullptr};
-  std::atomic<stop_state*> state{nullptr};
-  std::atomic_bool executing{false};
-  bool* destroyed{nullptr};
+  stop_callback_record** prev_ptr{nullptr};
+
+  // Execution handshake.
+  bool* removed_during_callback{nullptr};  // flag owned by the notifying thread
+  std::atomic<bool> completed{false};      // cross-thread completion signal
+
+  // Dispatch.
   void (*invoke)(stop_callback_record*) noexcept {nullptr};
 };
 
-struct stop_state {
-  mutable std::mutex mutex;
-  // Atomic so the hot read path (stop_requested) needs no lock. The mutex
-  // guards only the callback list; see request_stop() for the ordering
-  // between the atomic flag and the list.
-  std::atomic_bool requested{false};
-  std::thread::id requester_thread{};
-  stop_callback_record* head{nullptr};
+inline void cpu_pause() noexcept {
+#if defined(__i386__) || defined(__x86_64__)
+  asm volatile("pause");
+#elif defined(__aarch64__) || defined(__arm__)
+  asm volatile("yield");
+#elif defined(__powerpc64__)
+  asm volatile("or 27,27,27");
+#endif
+}
 
-  void push(stop_callback_record& record) noexcept {
-    record.state.store(this, std::memory_order_release);
-    record.prev = nullptr;
-    record.next = head;
-    if (head != nullptr) {
-      head->prev = &record;
+struct spin_wait {
+  static constexpr std::uint32_t yield_threshold = 20;
+  std::uint32_t count{0};
+
+  void wait() noexcept {
+    if (count++ < yield_threshold) {
+      cpu_pause();
+    } else {
+      std::this_thread::yield();
     }
-    head = &record;
+  }
+};
+
+struct stop_state {
+  static constexpr std::uint8_t stop_requested_bit = 1;  // bit 0
+  static constexpr std::uint8_t locked_bit = 2;          // bit 1
+
+  // Stop flag and spinlock fused into one word.
+  mutable std::atomic<std::uint8_t> state{0};
+  // Plain pointer, guarded by the spinlock.
+  stop_callback_record* head{nullptr};
+  // Written under the lock by request_stop().
+  std::thread::id requester_thread{};
+
+  // Returns the pre-lock state value; the caller MUST pass it to unlock().
+  std::uint8_t lock() noexcept {
+    spin_wait spinner;
+    std::uint8_t prev = state.load(std::memory_order_relaxed);
+    for (;;) {
+      while ((prev & locked_bit) != 0) {  // held: spin without CAS
+        spinner.wait();
+        prev = state.load(std::memory_order_relaxed);
+      }
+      // CAS from {0, 1} to {2, 3}. Acquire pairs with the previous unlock.
+      if (state.compare_exchange_weak(prev, prev | locked_bit,
+                                      std::memory_order_acquire,
+                                      std::memory_order_relaxed)) {
+        return prev;
+      }
+    }
   }
 
-  void unlink(stop_callback_record& record) noexcept {
-    if (record.prev != nullptr) {
-      record.prev->next = record.next;
-    } else if (head == &record) {
-      head = record.next;
-    }
+  // Restores the pre-lock value: keeps the requested bit iff it was set.
+  void unlock(std::uint8_t prev) noexcept {
+    state.store(prev, std::memory_order_release);
+  }
 
-    if (record.next != nullptr) {
-      record.next->prev = record.prev;
+  // Returns true iff the lock was acquired. With set_requested == true the
+  // stop request is claimed in the same RMW. On success with
+  // set_requested == false the caller must unlock(0).
+  bool try_lock_unless_stop_requested(bool set_requested) noexcept {
+    spin_wait spinner;
+    std::uint8_t prev = state.load(std::memory_order_relaxed);
+    for (;;) {
+      if ((prev & stop_requested_bit) != 0) {
+        return false;  // stop already requested: fail fast, no CAS
+      }
+      if (prev != 0) {  // == locked_bit: held, spin
+        spinner.wait();
+        prev = state.load(std::memory_order_relaxed);
+        continue;
+      }
+      // Only ever CASes from 0. The claim fuses lock + request into one RMW.
+      auto next = static_cast<std::uint8_t>(
+          set_requested ? (locked_bit | stop_requested_bit) : locked_bit);
+      if (state.compare_exchange_weak(prev, next, std::memory_order_acq_rel,
+                                      std::memory_order_relaxed)) {
+        return true;
+      }
     }
+  }
 
-    record.next = nullptr;
-    record.prev = nullptr;
-    record.state.store(nullptr, std::memory_order_release);
+  // Registers a record by pushing it onto the list under the spinlock.
+  // Returns false (without touching the list) if stop was already requested;
+  // the caller then fires the callback inline.
+  bool try_add_callback(stop_callback_record* record) noexcept {
+    if (!try_lock_unless_stop_requested(false)) {
+      return false;
+    }
+    // Plain writes under the spinlock. Push onto the head.
+    record->next = head;
+    record->prev_ptr = &head;
+    if (record->next != nullptr) {
+      record->next->prev_ptr = &record->next;
+    }
+    head = record;
+    unlock(0);  // release-publishes the push
+    return true;
+  }
+
+  // Unregistration, called by ~inplace_stop_callback for a registered record.
+  void remove_callback(stop_callback_record* record) noexcept {
+    std::uint8_t prev = lock();  // CAS acquire
+    if (record->prev_ptr != nullptr) {
+      // Still linked: uniform unlink, no head special case.
+      *record->prev_ptr = record->next;
+      if (record->next != nullptr) {
+        record->next->prev_ptr = record->prev_ptr;
+      }
+      unlock(prev);
+      return;
+    }
+    // Popped (or drained by ~inplace_stop_source): out of the list.
+    std::thread::id notifier = requester_thread;  // plain read under lock
+    unlock(prev);
+
+    if (std::this_thread::get_id() == notifier) {
+      // Reentrant destroy on the requesting thread, or the requesting thread
+      // destroying a record that already completed: the nullptr guard skips
+      // finished request_stop calls.
+      if (record->removed_during_callback != nullptr) {
+        *record->removed_during_callback = true;
+      }
+    } else {
+      // Executing (or about to execute) on the requesting thread: wait.
+      spin_wait spinner;
+      while (!record->completed.load(std::memory_order_acquire)) {
+        spinner.wait();
+      }
+    }
   }
 };
 
@@ -116,42 +225,16 @@ class inplace_stop_callback {
   inplace_stop_callback(inplace_stop_callback&&) = delete;
   inplace_stop_callback& operator=(inplace_stop_callback&&) = delete;
 
-  ~inplace_stop_callback() { unregister(); }
+  ~inplace_stop_callback() {
+    if (state_ != nullptr) {
+      state_->remove_callback(&record_);
+    }
+  }
 
  private:
   struct owned_record : detail::stop_callback_record {
     void* owner{nullptr};
   };
-
-  void unregister() noexcept {
-    auto* state = state_;
-    if (state != nullptr) {
-      std::unique_lock lock(state->mutex);
-      if (record_.state.load(std::memory_order_relaxed) != nullptr) {
-        state->unlink(record_);
-        state_ = nullptr;
-        return;
-      }
-
-      if (record_.executing.load(std::memory_order_acquire)) {
-        if (state->requester_thread == std::this_thread::get_id()) {
-          if (record_.destroyed != nullptr) {
-            *record_.destroyed = true;
-          }
-          state_ = nullptr;
-          return;
-        }
-        lock.unlock();
-        while (record_.executing.load(std::memory_order_acquire)) {
-          record_.executing.wait(true, std::memory_order_acquire);
-        }
-        state_ = nullptr;
-        return;
-      }
-
-      state_ = nullptr;
-    }
-  }
 
   void invoke() noexcept { callback_(); }
 
@@ -178,8 +261,8 @@ class inplace_stop_token {
 
   /** @brief Returns true once the associated source has requested stop. */
   [[nodiscard]] bool stop_requested() const noexcept {
-    return state_ != nullptr &&
-           state_->requested.load(std::memory_order_acquire);
+    return state_ != nullptr && (state_->state.load(std::memory_order_acquire) &
+                                 detail::stop_state::stop_requested_bit) != 0;
   }
 
  private:
@@ -206,11 +289,23 @@ class inplace_stop_source {
   inplace_stop_source(const inplace_stop_source&) = delete;
   inplace_stop_source& operator=(const inplace_stop_source&) = delete;
 
+  // Defensive drain: unlinks registrations that were never destroyed before
+  // the source died (excluded by the lifetime contract, kept as a safety
+  // net) and pre-marks each drained record completed so a later unregister
+  // cannot wait on a completion that will never happen.
   ~inplace_stop_source() {
-    std::lock_guard lock(state_.mutex);
+    std::uint8_t prev = state_.lock();
     while (state_.head != nullptr) {
-      state_.unlink(*state_.head);
+      detail::stop_callback_record* record = state_.head;
+      state_.head = record->next;
+      if (state_.head != nullptr) {
+        state_.head->prev_ptr = &state_.head;
+      }
+      record->prev_ptr = nullptr;  // mark removed
+      record->next = nullptr;
+      record->completed.store(true, std::memory_order_release);
     }
+    state_.unlock(prev);
   }
 
   /** @brief Returns a token connected to this source. */
@@ -224,7 +319,8 @@ class inplace_stop_source {
 
   /** @brief Returns whether stop has already been requested. */
   [[nodiscard]] bool stop_requested() const noexcept {
-    return state_.requested.load(std::memory_order_acquire);
+    return (state_.state.load(std::memory_order_acquire) &
+            detail::stop_state::stop_requested_bit) != 0;
   }
 
   /**
@@ -233,32 +329,44 @@ class inplace_stop_source {
    * requested.
    */
   bool request_stop() noexcept {
-    // Claim the request first: the exchange releases the flag so token reads
-    // synchronize with it. Registrars that read the flag as false inside the
-    // mutex then push before unlocking, and this thread re-reads the list
-    // under the same mutex afterwards, so no registration is missed.
-    if (state_.requested.exchange(true, std::memory_order_acq_rel)) {
+    // The claim fuses lock acquisition and the stop request into one RMW;
+    // the loser of the claim returns false without touching the list.
+    if (!state_.try_lock_unless_stop_requested(true)) {
       return false;
     }
+    // This call holds the lock and the requested bit is set (state == 3).
     state_.requester_thread = std::this_thread::get_id();
 
-    std::unique_lock lock(state_.mutex);
     while (state_.head != nullptr) {
       detail::stop_callback_record* record = state_.head;
-      bool destroyed = false;
-      record->destroyed = &destroyed;
-      record->executing.store(true, std::memory_order_release);
-      state_.unlink(*record);
-      auto* invoke = record->invoke;
-      lock.unlock();
-      invoke(record);
-      lock.lock();
-      if (!destroyed) {
-        record->destroyed = nullptr;
-        record->executing.store(false, std::memory_order_release);
-        record->executing.notify_all();
+      record->prev_ptr = nullptr;  // "popped" marker, under lock
+      state_.head = record->next;
+      if (state_.head != nullptr) {
+        state_.head->prev_ptr = &state_.head;
       }
+      bool removed_during_callback = false;
+      record->removed_during_callback = &removed_during_callback;
+
+      // ONE store: opens the lock AND keeps the requested flag visible.
+      state_.state.store(detail::stop_state::stop_requested_bit,
+                         std::memory_order_release);
+
+      record->invoke(record);  // callback runs with the lock OPEN
+
+      if (!removed_during_callback) {
+        // The record is still valid: finalize it so unregisterers stop
+        // waiting. If it was destroyed inside its own callback body, it is
+        // dangling and must not be touched.
+        record->removed_during_callback = nullptr;
+        record->completed.store(true, std::memory_order_release);
+      }
+
+      state_.lock();  // re-lock: CAS acquire between callbacks
     }
+
+    // Final unlock: the requested bit is sticky.
+    state_.state.store(detail::stop_state::stop_requested_bit,
+                       std::memory_order_release);
     return true;
   }
 
@@ -275,23 +383,17 @@ inplace_stop_callback<Callback>::inplace_stop_callback(
 
   detail::stop_state* state = token.state_;
   if (state == nullptr) {
+    return;  // null token: never fires
+  }
+
+  if (state->try_add_callback(&record_)) {
+    state_ = state;  // registered
     return;
   }
 
-  bool fire_now = false;
-  {
-    std::lock_guard lock(state->mutex);
-    if (state->requested.load(std::memory_order_acquire)) {
-      fire_now = true;
-    } else {
-      state->push(record_);
-      state_ = state;
-    }
-  }
-
-  if (fire_now) {
-    record_.invoke(&record_);
-  }
+  // Stop already requested: fire inline, never enters the list. The
+  // destructor becomes a no-op (state_ stays nullptr).
+  record_.invoke(&record_);
 }
 
 /**

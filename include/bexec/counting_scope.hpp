@@ -31,6 +31,7 @@
 #include <concepts>
 #include <cstddef>
 #include <exception>
+#include <limits>
 #include <memory>
 #include <type_traits>
 #include <utility>
@@ -52,194 +53,159 @@ class simple_counting_scope {
   [[nodiscard]] join_sender join() noexcept;
 
   void close() noexcept {
-    state current = load_state();
-    for (;;) {
-      switch (current) {
-        case state::open:
-          if (try_update_state(current, state::closed)) {
-            return;
-          }
-          break;
-        case state::open_joining:
-          if (try_update_state(current, state::closed_joining)) {
-            (void)try_complete_join();
-            return;
-          }
-          break;
-        case state::closed:
-        case state::closed_joining:
-        case state::joined:
-          return;
-      }
-    }
+    word_.fetch_or(closed_bit, std::memory_order_release);
   }
 
  private:
-  enum class state : unsigned char {
-    open,
-    open_joining,
-    closed,
-    closed_joining,
-    joined
-  };
+  // The association count and the scope state are packed into a single atomic
+  // word, word = (count << 3) | state_bits, so that every read-modify-write
+  // validates the entire (count, state) pair with one CAS. "Unused" is simply
+  // word_ == 0.
+  static constexpr std::size_t closed_bit = 1;        // 0b001
+  static constexpr std::size_t join_needed_bit = 2;   // 0b010
+  static constexpr std::size_t join_running_bit = 4;  // 0b100
+  static constexpr std::size_t max_associations =
+      std::numeric_limits<std::size_t>::max() >> 3;
 
-  enum class join_start { complete, enqueue };
+  static constexpr std::size_t count_of(std::size_t word) noexcept {
+    return word >> 3;
+  }
+
+  static constexpr std::size_t state_of(std::size_t word) noexcept {
+    return word & 7;
+  }
+
+  static constexpr std::size_t make_word(std::size_t count,
+                                         std::size_t state) noexcept {
+    return (count << 3) | state;
+  }
+
+  static constexpr bool is_closed(std::size_t word) noexcept {
+    return (word & closed_bit) != 0;
+  }
+
+  static constexpr bool is_joining(std::size_t word) noexcept {
+    return (word & join_running_bit) != 0;
+  }
+
+  static constexpr bool is_joined(std::size_t word) noexcept {
+    return word == closed_bit;
+  }
 
   friend class token;
   friend class join_sender;
   friend class counting_scope;
 
-  [[nodiscard]] association try_associate() noexcept;
-
   void ensure_destructible() noexcept {
-    const state current = load_state();
-    if (current == state::joined) {
-      return;
+    // Deliberately more permissive than the C++26 contract: drained open and
+    // closed scopes (count == 0, no join in flight) stay destructible, which
+    // preserves the historical bexec behavior.
+    const std::size_t bits = word_.load(std::memory_order_acquire);
+    if ((bits & join_running_bit) != 0 || count_of(bits) != 0) {
+      std::terminate();
     }
-    if (unused_.load(std::memory_order_acquire) && load_count() == 0 &&
-        (current == state::open || current == state::closed)) {
-      return;
-    }
-    std::terminate();
   }
 
-  void disassociate() noexcept { release_count(); }
+  [[nodiscard]] bool try_associate() noexcept {
+    std::size_t bits = word_.load(std::memory_order_acquire);
+    for (;;) {
+      if (is_closed(bits) || count_of(bits) == max_associations) {
+        return false;  // no effect
+      }
+      // state_of(bits) | join_needed_bit maps 0 -> 2, 2 -> 2 and 6 -> 6.
+      const std::size_t next =
+          make_word(count_of(bits) + 1, state_of(bits) | join_needed_bit);
+      if (word_.compare_exchange_weak(bits, next, std::memory_order_acquire,
+                                      std::memory_order_acquire)) {
+        return true;
+      }
+    }
+  }
+
+  void disassociate() noexcept {
+    std::size_t bits = word_.load(std::memory_order_relaxed);
+    for (;;) {
+      assert(count_of(bits) > 0);
+      const std::size_t count = count_of(bits) - 1;
+      // Reaching zero while joining becomes joined in this very CAS, dropping
+      // join_needed_bit and join_running_bit in the same write.
+      const std::size_t next = (count == 0 && is_joining(bits))
+                                   ? closed_bit
+                                   : make_word(count, state_of(bits));
+      if (word_.compare_exchange_weak(bits, next, std::memory_order_acq_rel,
+                                      std::memory_order_relaxed)) {
+        if (is_joined(next)) {
+          complete_registered_joins();
+        }
+        return;
+      }
+    }
+  }
 
   bool start_join(detail::scope_join_waiter& waiter) noexcept {
-    if (prepare_join() == join_start::complete) {
-      return true;
-    }
-
-    push_joiner(waiter);
-    (void)try_complete_join();
-    return false;
-  }
-
-  join_start prepare_join() noexcept {
-    state current = load_state();
+    std::size_t bits = word_.load(std::memory_order_relaxed);
     for (;;) {
-      switch (current) {
-        case state::open:
-          if (try_update_state(current, state::open_joining)) {
-            current = state::open_joining;
-          }
-          break;
-        case state::closed:
-          if (load_count() == 0) {
-            if (try_update_state(current, state::joined)) {
-              complete_ready_joiners();
-              return join_start::complete;
-            }
-            break;
-          }
-          if (try_update_state(current, state::closed_joining)) {
-            current = state::closed_joining;
-          }
-          break;
-        case state::open_joining:
-        case state::closed_joining:
-          return try_complete_join() ? join_start::complete
-                                     : join_start::enqueue;
-        case state::joined:
-          complete_ready_joiners();
-          return join_start::complete;
+      if (count_of(bits) == 0) {
+        // No outstanding work: force joined regardless of open/closed/unused.
+        // This also closes an open empty scope.
+        if (word_.compare_exchange_weak(bits, closed_bit,
+                                        std::memory_order_acq_rel,
+                                        std::memory_order_relaxed)) {
+          return true;  // complete inline
+        }
+        continue;  // an associate raced in; re-evaluate
+      }
+      // count > 0: mark joining. join_running_bit is a flag, not a counter;
+      // concurrent joiners OR the same bit idempotently.
+      if (word_.compare_exchange_weak(bits, bits | join_running_bit,
+                                      std::memory_order_relaxed,
+                                      std::memory_order_relaxed)) {
+        return !register_joiner(waiter);
       }
     }
   }
 
-  void push_joiner(detail::scope_join_waiter& waiter) noexcept {
-    detail::scope_join_waiter* current = joiners_.load(memory_order);
-    do {
-      waiter.next = current;
-    } while (!joiners_.compare_exchange_weak(current, &waiter, memory_order,
-                                             memory_order));
-
-    if (load_state() == state::joined) {
-      complete_ready_joiners();
-    }
-  }
-
-  state load_state() const noexcept { return state_.load(memory_order); }
-
-  std::size_t load_count() const noexcept { return count_.load(memory_order); }
-
-  bool try_update_state(state& expected, state desired) noexcept {
-    return state_.compare_exchange_weak(expected, desired, memory_order,
-                                        memory_order);
-  }
-
-  static constexpr bool can_associate(state value) noexcept {
-    return static_cast<unsigned char>(value) <=
-           static_cast<unsigned char>(state::open_joining);
-  }
-
-  void release_count() noexcept {
-    if (decrement_count() == 0) {
-      unused_.store(true, std::memory_order_release);
-      (void)try_complete_join();
-    }
-  }
-
-  void increment_count() noexcept {
-    const std::size_t previous = count_.fetch_add(1, memory_order);
-    assert(previous != static_cast<std::size_t>(-1));
-  }
-
-  std::size_t decrement_count() noexcept {
-    const std::size_t previous = count_.fetch_sub(1, memory_order);
-    assert(previous != 0);
-    return previous - 1;
-  }
-
-  bool try_complete_join() noexcept {
-    state current = load_state();
+  bool register_joiner(detail::scope_join_waiter& waiter) noexcept {
+    // Returns false iff the list was already drained (sentinel observed); the
+    // caller completes the join inline and the node is never linked.
+    auto* head = joiners_.load(std::memory_order_acquire);
     for (;;) {
-      switch (current) {
-        case state::open:
-        case state::closed:
-          return false;
-        case state::open_joining:
-          if (load_count() != 0) {
-            return false;
-          }
-          if (try_update_state(current, state::closed_joining)) {
-            current = state::closed_joining;
-          }
-          break;
-        case state::closed_joining:
-          if (load_count() != 0) {
-            return false;
-          }
-          if (try_update_state(current, state::joined)) {
-            complete_ready_joiners();
-            return true;
-          }
-          break;
-        case state::joined:
-          complete_ready_joiners();
-          return true;
+      if (head == joiners_sentinel()) {
+        return false;
+      }
+      waiter.next = head;
+      if (joiners_.compare_exchange_weak(head, &waiter,
+                                         std::memory_order_acq_rel,
+                                         std::memory_order_acquire)) {
+        return true;
       }
     }
   }
 
-  void complete_ready_joiners() noexcept {
-    complete_all(joiners_.exchange(nullptr, memory_order));
-  }
-
-  static void complete_all(detail::scope_join_waiter* waiter) noexcept {
-    while (waiter != nullptr) {
-      detail::scope_join_waiter* next = waiter->next;
-      waiter->next = nullptr;
+  void complete_registered_joins() noexcept {
+    // Called exactly once, by the disassociate whose CAS produced
+    // word_ == closed_bit. The exchange both empties the list and installs
+    // the terminal sentinel, so later registrations complete inline.
+    auto* list =
+        joiners_.exchange(joiners_sentinel(), std::memory_order_acq_rel);
+    while (list != nullptr) {
+      // Advance the cursor before completing: complete_deferred() starts the
+      // join receiver's scheduled completion and the waiter (a subobject of
+      // the join operation state) may be destroyed before the loop reads
+      // next again.
+      auto* waiter = std::exchange(list, list->next);
       waiter->complete_deferred();
-      waiter = next;
     }
   }
 
-  std::atomic<state> state_{state::open};
-  std::atomic<std::size_t> count_{0};
-  std::atomic_bool unused_{true};
+  detail::scope_join_waiter* joiners_sentinel() noexcept {
+    // The scope's own address serves as the drained sentinel; it is only ever
+    // compared against a head pointer, never dereferenced.
+    return reinterpret_cast<detail::scope_join_waiter*>(this);
+  }
+
+  std::atomic<std::size_t> word_{0};  // (count << 3) | state bits; 0 == unused
   std::atomic<detail::scope_join_waiter*> joiners_{nullptr};
-  static constexpr std::memory_order memory_order = std::memory_order_seq_cst;
 };
 
 class simple_counting_scope::association {
@@ -267,10 +233,10 @@ class simple_counting_scope::association {
   }
 
   [[nodiscard]] association try_associate() const noexcept {
-    if (scope_ == nullptr) {
+    if (scope_ == nullptr || !scope_->try_associate()) {
       return {};
     }
-    return scope_->try_associate();
+    return association{*scope_};
   }
 
  private:
@@ -290,31 +256,15 @@ class simple_counting_scope::association {
   simple_counting_scope* scope_{nullptr};
 };
 
-inline simple_counting_scope::association
-simple_counting_scope::try_associate() noexcept {
-  if (!can_associate(load_state())) {
-    return {};
-  }
-
-  increment_count();
-  unused_.store(false, std::memory_order_release);
-  if (can_associate(load_state())) {
-    return association{*this};
-  }
-
-  release_count();
-  return {};
-}
-
 class simple_counting_scope::token {
  public:
   token() = default;
 
   [[nodiscard]] association try_associate() const noexcept {
-    if (scope_ == nullptr) {
+    if (scope_ == nullptr || !scope_->try_associate()) {
       return {};
     }
-    return scope_->try_associate();
+    return association{*scope_};
   }
 
   template <bexec::sender Sender>

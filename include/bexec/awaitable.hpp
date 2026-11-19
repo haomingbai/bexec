@@ -120,12 +120,16 @@ using sender_awaitable_value_t =
  * from being selected (and hard-erroring) for such senders.
  */
 struct awaitable_connect_probe {
-  void set_value() noexcept;
+  // The probe is only ever named in unevaluated contexts, but GCC 16 may still
+  // instantiate the connect operation with it and emit a reference to the
+  // zero-argument set_value(). Inline definitions keep the header linkable
+  // without changing the fact that the probe never runs.
+  void set_value() noexcept {}
   template <class... Args>
-  void set_value(Args&&...) noexcept;
+  void set_value(Args&&...) noexcept {}
   template <class Error>
-  void set_error(Error&&) noexcept;
-  void set_stopped() noexcept;
+  void set_error(Error&&) noexcept {}
+  void set_stopped() noexcept {}
 };
 
 template <class Sender, class Promise>

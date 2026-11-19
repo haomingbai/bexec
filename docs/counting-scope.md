@@ -10,18 +10,17 @@ child senders so scope stop requests are visible through `get_stop_token`.
 
 ## Why a single packed word
 
-The physical-machine report (`.artifacts/REPORT.md` §4, §8.3) measured
-same-protocol probes in which bexec's counting scope is 23–39% slower than
+Same-protocol probes measured bexec's counting scope 23–39% slower than
 stdexec: `spawn_just` +39%, `join_empty` +38%, `associate_cycle` +23%. The root
-cause is structural: bexec keeps **three separate atomics** — `state_`,
-`count_`, and the `joiners_` Treiber stack (plus the `unused_` flag), see
-`include/bexec/counting_scope.hpp:238-241` — so every associate/disassociate
-performs multiple read-modify-write operations on different words, and the
-"count reached zero" and "state says joining" decisions live in different
-locations with a window between them. stdexec instead packs `(count << 3) |
-state` into a single `atomic<std::size_t>` (`__counting_scopes.hpp:543-544`),
-so each decision is validated by one CAS. REPORT.md §9 (recommendation 2)
-concludes: pack `state_ + count_` into one word; expected recovery 20–40%.
+cause is structural: the old bexec implementation kept **three separate
+atomics** — `state_`, `count_`, and the `joiners_` Treiber stack (plus the
+`unused_` flag) — so every associate/disassociate performed multiple
+read-modify-write operations on different words, and the "count reached zero"
+and "state says joining" decisions lived in different locations with a window
+between them. stdexec instead packs `(count << 3) | state` into a single
+`atomic<std::size_t>`, so each decision is validated by one CAS. The
+recommended fix is to pack `state_ + count_` into one word; expected recovery
+20–40%.
 
 With everything in one word, each RMW validates the *entire* `(count, state)`
 pair with a single CAS, the transient states that the old multi-atomic version
@@ -50,8 +49,7 @@ State bit values (one bit each):
 | `join_needed_bit`   | `2`   | scope has been used (count > 0 or was > 0) |
 | `join_running_bit`  | `4`   | at least one join sender is pending        |
 
-State combinations (mirrors stdexec's reachable-states table,
-`__counting_scopes.hpp:534-542`):
+State combinations (mirrors stdexec's reachable-states table):
 
 | `state_bits` | Binary  | Name                | Count   |
 |--------------|---------|---------------------|---------|
@@ -76,8 +74,8 @@ Unreachable combinations:
 
 The old encoding maps onto the new one as: `state::open` → `2`,
 `open_joining` → `6`, `closed` → `3`, `closed_joining` → `7`, `joined` → `1`
-(count 0). The separate `unused_` atomic bool (`counting_scope.hpp:240`) is
-absorbed: "unused" is simply `word == 0`.
+(count 0). The separate `unused_` atomic bool is absorbed: "unused" is simply
+`word == 0`.
 
 Naming shortcuts used below (all `constexpr`, no atomics):
 
@@ -110,9 +108,8 @@ std::atomic<detail::scope_join_waiter*> joiners_{nullptr};
 `count_of(word) == max_associations`, per the C++26 contract. The limit is
 2⁶¹−1 associations on 64-bit platforms (2²⁹−1 on 32-bit), unreachable in
 practice; no saturating counter is needed and the check rides for free inside
-the existing CAS loop. This replaces the current `assert`-and-wrap behavior in
-`increment_count()` (`counting_scope.hpp:183-186`), which would silently wrap
-and corrupt the count.
+the existing CAS loop. This replaces the old `assert`-and-wrap behavior, which
+would silently wrap and corrupt the count.
 
 **Invariants.**
 
@@ -207,9 +204,8 @@ bool try_associate() noexcept {
 ```
 
 The CAS replaces the old four-step sequence (load state, `fetch_add` count,
-store `unused_`, re-load state, plus a rollback path that called
-`release_count()`, `counting_scope.hpp:293-307`); a failed CAS has nothing to
-undo.
+store `unused_`, re-load state, plus a rollback path); a failed CAS has
+nothing to undo.
 
 ### `disassociate`
 
@@ -262,9 +258,8 @@ void close() noexcept {
 
 `join_sender::operation::start()` calls `start_join(*this)`. Return `true`
 means the join completes inline (the caller delivers `set_value()` on the
-receiver immediately, as today at `counting_scope.hpp:396-400`); return `false`
-means the waiter was registered and will be completed later through
-`complete_deferred()`.
+receiver immediately); return `false` means the waiter was registered and will
+be completed later through `complete_deferred()`.
 
 ```cpp
 bool start_join(detail::scope_join_waiter& w) noexcept {
@@ -335,8 +330,8 @@ void complete_registered_joins() noexcept {
 The advance-cursor-before-completing discipline is mandatory:
 `complete_deferred()` starts the join receiver's scheduled completion and the
 waiter (a subobject of the join operation state) may be destroyed by its owner
-before the loop reads `next` again. This matches the current
-`complete_all()` at `counting_scope.hpp:229-236`.
+before the loop reads `next` again. The old drain loop followed the same
+discipline.
 
 ### Destruction
 
@@ -351,12 +346,12 @@ if ((bits & join_running_bit) != 0 || count_of(bits) != 0) {
 ```
 
 This admits `word_` values 0 (unused), 1 (unused-and-closed / joined), and
-drained 2 / 3 (open/closed with count 0). It preserves current bexec behavior
-(`ensure_destructible`, `counting_scope.hpp:94-104`, where the `unused_` flag
-is re-set when the count drains) and is deliberately more permissive than the
-C++26 contract that stdexec implements (stdexec terminates on drained open and
-closed scopes; see Deviations). Tokens and associations remain non-owning
-views that must not outlive the scope.
+drained 2 / 3 (open/closed with count 0). It preserves bexec's historical
+behavior (`ensure_destructible`; the old `unused_` flag was re-set when the
+count drained) and is deliberately more permissive than the C++26 contract
+that stdexec implements (stdexec terminates on drained open and closed scopes;
+see Deviations). Tokens and associations remain non-owning views that must not
+outlive the scope.
 
 ## Interleavings
 
@@ -458,8 +453,7 @@ observation (acquire) synchronizes with D's exchange (release) and transitively
 with D's acq_rel `word_` CAS, so J's inline completion happens after the child
 operations' results are visible. The old version covered the same race with a
 post-push `load_state() == joined` re-check plus a second
-`exchange(nullptr)` drain (`counting_scope.hpp:150-160`); the sentinel makes
-both unnecessary.
+`exchange(nullptr)` drain; the sentinel makes both unnecessary.
 
 ### 5. Join on an already-joined or drained scope
 
@@ -508,11 +502,11 @@ re-derive the decision; the packed CAS makes the transition atomic.
   associate/disassociate CAS to preserve list bits for no benefit.
 - This matches stdexec: the join/running *flags* live in the packed word, but
   the *list* of registered join operations is a separate atomic
-  (`__registered_join_ops_`, `__counting_scopes.hpp:554`).
+  (`__registered_join_ops_`).
 - bexec's waiter type `detail::scope_join_waiter` (non-atomic `next`, virtual
-  `complete_deferred()`, completed via the joiner's start scheduler, as at
-  `counting_scope.hpp:405-425`) is unchanged; only the scope-side push/drain
-  protocol changes (sentinel instead of nullptr-drain + re-check).
+  `complete_deferred()`, completed via the joiner's start scheduler) is
+  unchanged; only the scope-side push/drain protocol changes (sentinel instead
+  of nullptr-drain + re-check).
 
 ### ABA on the joiner stack
 
@@ -546,16 +540,15 @@ whole-list drain therefore avoids ABA by construction.
 
 Note on the CAS failure order: per [atomics.order] the on-failure argument
 must not be stronger than the on-success argument. (stdexec's source comment
-at `__counting_scopes.hpp:367-369` phrases this rule backwards; its code is
-nevertheless correct. This doc states the rule as written in the standard.)
+phrases this rule backwards; its code is nevertheless correct. This doc states
+the rule as written in the standard.)
 
 Why the relaxed `join_running` CAS is still correct: the joining thread does
 not synchronize with the associated operations on `word_`; it synchronizes on
 `joiners_` instead. Every disassociate is acq_rel; the last decrementer drains
 the list with acq_rel; therefore every count decrement strongly
 happens-before the completion of every registered join, even though the
-`join_running` CAS itself is relaxed. (Same argument as stdexec,
-`__counting_scopes.hpp:509-518`.)
+`join_running` CAS itself is relaxed. (Same argument as stdexec.)
 
 ## Association and spawn senders
 
@@ -607,31 +600,10 @@ the scope only through `try_associate()` / `disassociate()`.
 ## Attribution
 
 The packed state word design is adapted from stdexec (tag nvhpc-26.05), file
-include/stdexec/__detail/__counting_scopes.hpp, Copyright NVIDIA Corporation,
-Apache License v2.0 with LLVM Exceptions. (The file header additionally
-credits Ian Petersen, 2025.) bexec is MIT-licensed; all prose and pseudocode
-here was written fresh for bexec, referencing the algorithm by location.
-Verified line ranges in
-`/tmp/stdexec-26.05/include/stdexec/__detail/__counting_scopes.hpp`:
-
-- layout comment and `max_associations`: :253-260
-- destructor (`__destructible` rationale): :270-293
-- `close()` (`fetch_or`, release): :295-313
-- `__try_associate` (acquire/acquire CAS loop): :315-381
-- `__disassociate` (acq_rel/relaxed CAS loop, joined transition, plus the
-  note explaining why a `fetch_sub`-then-`store` transliteration is racy):
-  :383-455
-- `__start_join_sender` (count 0 → joined CAS; `|join_running` relaxed CAS):
-  :457-525
-- state-bit constants `__closed = 1`, `__join_needed = 2`,
-  `__join_running = 4`: :528-530
-- encoding comment and `__bits_` storage (`(count << 3) | (state & 7)`):
-  :532-544
-- joiner list storage and sentinel documentation: :546-554
-- state predicates, `__count`/`__state`/`__make_bits`: :559-634
-- `__register` (acq_rel/acquire push), `__dequeue_registered_join_operations`
-  (acq_rel `exchange(this)`), `__complete_registered_join_operations`:
-  :636-708
+`__detail/__counting_scopes.hpp`, Copyright NVIDIA Corporation, Apache License
+v2.0 with LLVM Exceptions. (The file header additionally credits Ian Petersen,
+2025.) bexec is MIT-licensed; all prose and pseudocode here was written fresh
+for bexec, referencing the algorithm by location.
 
 ## Deviations from stdexec
 
@@ -643,37 +615,34 @@ Verified line ranges in
 2. **Destructor leniency.** stdexec (and the C++26 contract it cites)
    terminates unless the word is exactly `0` or `closed_bit`, i.e. a drained
    open (`2`) or closed (`3`) scope after use is a `std::terminate()`. bexec
-   has always permitted destroying a used-but-drained scope (via the `unused_`
-   flag) and this redesign preserves that public behavior: the rule is
-   `count == 0 && !joining`. Do not "fix" this while implementing; changing it
-   would be an observable API change.
+   has always permitted destroying a used-but-drained scope (via the old
+   `unused_` flag) and this implementation preserves that public behavior: the
+   rule is `count == 0 && !joining`. Do not "fix" this; changing it would be an
+   observable API change.
 3. **Overflow behavior.** `try_associate` fails cleanly at
-   `max_associations` (stdexec/spec behavior). Current bexec instead asserts
-   in `increment_count` and would wrap; the redesign adopts the
+   `max_associations` (stdexec/spec behavior). The previous bexec
+   implementation asserted and could wrap; this implementation adopts the
    stdexec rule, which is strictly safer and unobservable in practice.
 4. **Joiner stack protocol.** stdexec installs a `this` sentinel with the
-   single drain `exchange`; bexec's current code drains with
-   `exchange(nullptr)` and covers late pushes with a post-push state re-check
-   plus a second `exchange(nullptr)` drain (`counting_scope.hpp:150-160`). The
-   redesign adopts stdexec's sentinel: exactly-once completion by
-   construction, no re-check pass, no second drain. The waiter node type is
-   unchanged.
-5. **Memory orders.** The current code uses `seq_cst` everywhere (member
-   constant `memory_order`, `counting_scope.hpp:242`); the redesign adopts
-   stdexec's differentiated orders (see the table). Both are correct; the
-   differentiated orders remove fences from the hot path, which is where the
-   23–39% gap is expected to be recovered.
+   single drain `exchange`; the previous bexec implementation drained with
+   `exchange(nullptr)` and covered late pushes with a post-push state re-check
+   plus a second `exchange(nullptr)` drain. This implementation adopts
+   stdexec's sentinel: exactly-once completion by construction, no re-check
+   pass, no second drain. The waiter node type is unchanged.
+5. **Memory orders.** The previous bexec implementation used `seq_cst`
+   everywhere; this implementation adopts stdexec's differentiated orders (see
+   the table). Both are correct; the differentiated orders remove fences from
+   the hot path, which is where the 23–39% gap is expected to be recovered.
 6. **Association object.** stdexec's `__association_t` wraps a
    `std::unique_ptr` with a disassociating deleter; bexec keeps its own
    `association` class with `scope_` pointer and `reset()`. Public API is
    unchanged and untouched by this redesign.
-7. **Documentation correction.** stdexec's comment on the
-   associate CAS's failure ordering (`:367-369`) states the
-   failure-stronger/success-weaker rule inverted; the code is correct. This
-   doc states the [atomics.order] rule correctly (failure may not be stronger
-   than success).
+7. **Documentation correction.** stdexec's comment on the associate CAS's
+   failure ordering states the failure-stronger/success-weaker rule inverted;
+   the code is correct. This doc states the [atomics.order] rule correctly
+   (failure may not be stronger than success).
 8. **Deferred join completion mechanism.** Not a deviation, recorded for the
-   implementer: like stdexec's `__join_state` (:117-178), bexec's join
+   implementer: like stdexec's `__join_state`, bexec's join
    operation pre-computes its scheduler and completes by connecting
    `schedule(scheduler_)` to a final receiver inside `complete_deferred()`;
    the packed-word protocol only changes *when* `complete_deferred()` runs

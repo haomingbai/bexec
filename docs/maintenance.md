@@ -269,7 +269,7 @@ behavior.
 ## Documentation Expectations
 
 Public API additions need Doxygen comments in the header and matching prose in
-`docs/usage.md` or `docs/design.md`. If a feature intentionally diverges from
+`docs/usage/` or `docs/design.md`. If a feature intentionally diverges from
 P2300, document that explicitly.
 
 ## Release Hygiene

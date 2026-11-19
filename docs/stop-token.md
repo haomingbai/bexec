@@ -28,10 +28,10 @@ callback throws, the implementation terminates.
 
 ## Why remove the mutex
 
-The previous design guarded the callback list with a `std::mutex`. On the
-physical-machine benchmark (`.artifacts/REPORT.md` §7.2/§8.5, i9-13900H,
-GCC 16.2.1, `-O3`), the *uncontended* mutex fast path alone consumes 39–43% of
-iteration time in the stop-token cases:
+The previous design guarded the callback list with a `std::mutex`. On a
+physical-machine benchmark (i9-13900H, GCC 16.2.1, `-O3`), the *uncontended*
+mutex fast path alone consumed 39–43% of iteration time in the stop-token
+cases:
 
 | Case                        | Mutex lock calls / iter | Lock share of iteration |
 |-----------------------------|-------------------------|-------------------------|
@@ -40,9 +40,9 @@ iteration time in the stop-token cases:
 | `stop_token.callback_fired` | 5                       | 41%                     |
 | `stop_token.callback_fired_8` | 26                    | 39%                     |
 
-A calibrated uncontended `pthread_mutex_lock+unlock` pair costs 2.32 ns
-(`tools/mutex_calib.c`), while stdexec's equivalent protocol uses zero mutexes
-(zero `pthread_mutex` calls across all 54 benchmark case pairs). Removing the
+A calibrated uncontended `pthread_mutex_lock+unlock` pair costs 2.32 ns, while
+stdexec's equivalent protocol uses zero mutexes (zero `pthread_mutex` calls
+across all 54 benchmark case pairs). Removing the
 mutex also removes the registration-path lock traffic seen in
 `when_all.just_1` (~25% of iteration time), which registers one stop callback
 per child.
@@ -678,7 +678,7 @@ struct spin_wait {
 ## Attribution
 
 The protocol is adapted from stdexec (tag nvhpc-26.05), file
-`include/stdexec/stop_token.hpp`, Copyright (c) 2021-2022 Facebook, Inc.;
+`stop_token.hpp`, Copyright (c) 2021-2022 Facebook, Inc.;
 2021-2024 NVIDIA Corporation, licensed under Apache License v2.0 with LLVM
 Exceptions. bexec is MIT-licensed; this document references the algorithm and
 its rationale — the bexec implementation is written from this specification,

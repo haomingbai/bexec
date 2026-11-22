@@ -27,3 +27,8 @@ Testing/
 .tmp/
 .cache/
 .artifacts/
+
+# Exclude JetBrains files
+.idea/
+.idea/*
+cmake-build-*/

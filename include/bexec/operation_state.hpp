@@ -27,7 +27,7 @@ namespace bexec {
  */
 struct start_t {
   template <class Operation>
-    requires(!std::is_rvalue_reference_v<Operation &&> &&
+    requires(!std::is_rvalue_reference_v<Operation&&> &&
              requires(Operation& operation) {
                { operation.start() } noexcept -> std::same_as<void>;
              })
